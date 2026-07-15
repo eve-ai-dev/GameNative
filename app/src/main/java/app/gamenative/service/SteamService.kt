@@ -30,7 +30,6 @@ import app.gamenative.data.GameSource
 import app.gamenative.data.LaunchInfo
 import app.gamenative.data.OwnedGames
 import app.gamenative.data.PostSyncInfo
-import app.gamenative.data.SteamLicenseForPics
 import app.gamenative.data.SteamApp
 import app.gamenative.data.SteamControllerConfigDetail
 import app.gamenative.data.SteamFriend
@@ -4334,7 +4333,7 @@ class SteamService : Service(), IChallengeUrlChanged {
                     licenseDao.deleteStaleLicenses(packageIds)
                 }
 
-                Timber.i("Getting licences from DB")
+                Timber.i("Getting licenses from DB")
                 // Get PICS information with the current license database.
                 licenseDao.getLicensesForPics()
                     .map { PICSRequest(it.packageId, it.accessToken) }
