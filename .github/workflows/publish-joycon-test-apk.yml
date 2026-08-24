@@ -1,0 +1,29 @@
+name: Publish Joy-Con test APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download verified build artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 32725308732 --repo eve-ai-dev/GameNative --name GameNative-JoyCon-Test-Y700
+
+      - name: Publish clearly marked prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create joycon-test-y700-20260824 \
+            GameNative-JoyCon-Test-Y700.apk \
+            --repo eve-ai-dev/GameNative \
+            --target 355b79a97b3eda0300756dbaa513e5f5563a2a9d \
+            --title "Joy-Con pairing test APK for Lenovo Y700" \
+            --notes "Experimental debug-signed build for physical validation of paired Joy-Con input. Package: app.gamenative.joycontest. It can coexist with the official GameNative app. Do not use as a normal installation or enter production credentials." \
+            --prerelease
