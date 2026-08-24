@@ -167,6 +167,8 @@ android {
             isMinifyEnabled = false
             isShrinkResources = false
             signingConfig = signingConfigs.getByName("debug")
+            applicationIdSuffix = ".joycontest"
+            versionNameSuffix = "-joycon-test"
         }
         release {
             isMinifyEnabled = true
