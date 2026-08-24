@@ -184,7 +184,7 @@ public class ExternalController {
         this.state.thumbLY = getCenteredAxis(event, MotionEvent.AXIS_Y, historyPos);
         this.state.thumbRX = getCenteredAxis(event, MotionEvent.AXIS_Z, historyPos);
         this.state.thumbRY = getCenteredAxis(event, MotionEvent.AXIS_RZ, historyPos);
-        if (historyPos == -1) {
+        if (historyPos == -1 && !JoyConSupport.isJoyCon(event.getDevice())) {
             float axisX = getCenteredAxis(event, MotionEvent.AXIS_HAT_X, historyPos);
             float axisY = getCenteredAxis(event, MotionEvent.AXIS_HAT_Y, historyPos);
             GamepadState gamepadState = this.state;
@@ -264,7 +264,7 @@ public class ExternalController {
     public boolean updateStateFromKeyEvent(KeyEvent event) {
         boolean z = false;
         boolean pressed = event.getAction() == KeyEvent.ACTION_DOWN;
-        int keyCode = event.getKeyCode();
+        int keyCode = JoyConSupport.remapKeyCode(event.getDevice(), event);
         int buttonIdx = getButtonIdxByKeyCode(keyCode);
         if (buttonIdx != -1) {
             if (buttonIdx == IDX_BUTTON_L2) {
@@ -369,7 +369,9 @@ public class ExternalController {
 
         boolean hasAxes =
                 device.getMotionRange(android.view.MotionEvent.AXIS_X) != null ||
-                        device.getMotionRange(android.view.MotionEvent.AXIS_Y) != null;
+                        device.getMotionRange(android.view.MotionEvent.AXIS_Y) != null ||
+                        device.getMotionRange(android.view.MotionEvent.AXIS_Z) != null ||
+                        device.getMotionRange(android.view.MotionEvent.AXIS_RZ) != null;
 
         boolean[] hasGamepadKeysArray = device.hasKeys(
                 KeyEvent.KEYCODE_BUTTON_A,
@@ -386,7 +388,8 @@ public class ExternalController {
             }
         }
 
-        return (isGamepad && hasGamepadKeys) ||
+        return JoyConSupport.isJoyCon(device) ||
+                (isGamepad && hasGamepadKeys) ||
                 (isJoystick && hasAxes);
     }
 

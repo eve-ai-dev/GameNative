@@ -1,6 +1,7 @@
 package com.winlator.inputcontrols;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
 
 public class GamepadState {
     public float thumbLX = 0;
@@ -65,5 +66,29 @@ public class GamepadState {
         this.triggerR = other.triggerR;
         this.buttons = other.buttons;
         System.arraycopy(other.dpad, 0, this.dpad, 0, 4);
+    }
+
+    public void mergeFrom(GamepadState other) {
+        if (other == null) return;
+        thumbLX = strongest(thumbLX, other.thumbLX);
+        thumbLY = strongest(thumbLY, other.thumbLY);
+        thumbRX = strongest(thumbRX, other.thumbRX);
+        thumbRY = strongest(thumbRY, other.thumbRY);
+        triggerL = Math.max(triggerL, other.triggerL);
+        triggerR = Math.max(triggerR, other.triggerR);
+        buttons |= other.buttons;
+        for (int i = 0; i < dpad.length; i++) dpad[i] |= other.dpad[i];
+    }
+
+    public static GamepadState combine(Collection<GamepadState> states) {
+        GamepadState combined = new GamepadState();
+        if (states != null) {
+            for (GamepadState state : states) combined.mergeFrom(state);
+        }
+        return combined;
+    }
+
+    private static float strongest(float current, float candidate) {
+        return Math.abs(candidate) > Math.abs(current) ? candidate : current;
     }
 }

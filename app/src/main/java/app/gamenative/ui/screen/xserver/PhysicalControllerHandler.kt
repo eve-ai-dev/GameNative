@@ -10,6 +10,7 @@ import com.winlator.inputcontrols.ControlElement
 import com.winlator.inputcontrols.ControlsProfile
 import com.winlator.inputcontrols.ExternalController
 import com.winlator.inputcontrols.ExternalControllerBinding
+import com.winlator.inputcontrols.JoyConSupport
 import com.winlator.math.Mathf
 import com.winlator.xserver.XServer
 import java.util.Timer
@@ -94,27 +95,28 @@ class PhysicalControllerHandler(
      */
     fun onKeyEvent(event: KeyEvent): Boolean {
         if (profile != null && event.repeatCount == 0) {
+            val keyCode = JoyConSupport.remapKeyCode(event.device, event)
             if (radialMenuPressed && !isRadialMenuOpenerDevice(event.deviceId)) return true
             val controller = profile?.getController(event.deviceId)
             if (controller != null) {
-                val controllerBinding = controller.getControllerBinding(event.keyCode)
+                val controllerBinding = controller.getControllerBinding(keyCode)
                 if (radialMenuPressed && controllerBinding?.binding == Binding.OPEN_RADIAL_MENU) {
-                    if (event.keyCode == radialMenuOpenerKeyCode ||
+                    if (keyCode == radialMenuOpenerKeyCode ||
                         radialMenuOpenerKeyCode == KeyEvent.KEYCODE_UNKNOWN
                     ) {
                         handleInputEvent(
                             controllerBinding.binding,
                             event.action == KeyEvent.ACTION_DOWN,
-                            sourceKeyCode = event.keyCode,
+                            sourceKeyCode = keyCode,
                             sourceDeviceId = event.deviceId,
                             sourceController = controller,
                         )
                         return true
                     }
-                    handleRadialMenuNavigationKey(event)
+                    handleRadialMenuNavigationKey(event, keyCode)
                     return true
                 }
-                if (radialMenuPressed && handleRadialMenuNavigationKey(event)) {
+                if (radialMenuPressed && handleRadialMenuNavigationKey(event, keyCode)) {
                     return true
                 }
 
@@ -122,9 +124,9 @@ class PhysicalControllerHandler(
                     // Some controllers emit BOTH a digital KeyEvent for L2/R2 and an analog axis value in MotionEvent.
                     // If this physical key is mapped to a virtual trigger AND the device exposes trigger axes,
                     // ignore the KeyEvent to avoid an initial "full press" spike. MotionEvent will provide the analog value.
-                    if ((event.keyCode == KeyEvent.KEYCODE_BUTTON_L2 || event.keyCode == KeyEvent.KEYCODE_BUTTON_R2) &&
+                    if ((keyCode == KeyEvent.KEYCODE_BUTTON_L2 || keyCode == KeyEvent.KEYCODE_BUTTON_R2) &&
                         (controllerBinding.binding == Binding.GAMEPAD_BUTTON_L2 || controllerBinding.binding == Binding.GAMEPAD_BUTTON_R2) &&
-                        deviceHasTriggerAxis(event.device, event.keyCode)
+                        deviceHasTriggerAxis(event.device, keyCode)
                     ) {
                         return true
                     }
@@ -135,7 +137,7 @@ class PhysicalControllerHandler(
                         controllerBinding.binding,
                         event.action == KeyEvent.ACTION_DOWN,
                         offset,
-                        sourceKeyCode = event.keyCode,
+                        sourceKeyCode = keyCode,
                         sourceDeviceId = event.deviceId,
                         sourceController = controller,
                     )
@@ -610,9 +612,9 @@ class PhysicalControllerHandler(
         return radialMenuOpenerDeviceId == UNKNOWN_DEVICE_ID || deviceId == radialMenuOpenerDeviceId
     }
 
-    private fun handleRadialMenuNavigationKey(event: KeyEvent): Boolean {
+    private fun handleRadialMenuNavigationKey(event: KeyEvent, keyCode: Int): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN) {
-            return when (event.keyCode) {
+            return when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_UP,
                 KeyEvent.KEYCODE_DPAD_DOWN,
                 KeyEvent.KEYCODE_DPAD_LEFT,
@@ -621,7 +623,7 @@ class PhysicalControllerHandler(
                 else -> false
             }
         }
-        val vector = when (event.keyCode) {
+        val vector = when (keyCode) {
             KeyEvent.KEYCODE_DPAD_UP -> 0f to -1f
             KeyEvent.KEYCODE_DPAD_DOWN -> 0f to 1f
             KeyEvent.KEYCODE_DPAD_LEFT -> -1f to 0f
