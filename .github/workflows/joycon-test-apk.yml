@@ -6,7 +6,7 @@ on:
     branches: ["build/joycon-test-apk"]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -52,3 +52,16 @@ jobs:
           path: GameNative-JoyCon-Test-Y700.apk
           if-no-files-found: error
           retention-days: 7
+
+      - name: Publish clearly marked prerelease
+        if: github.repository == 'eve-ai-dev/GameNative'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete joycon-test-y700-20260824 --cleanup-tag --yes || true
+          gh release create joycon-test-y700-20260824 \
+            GameNative-JoyCon-Test-Y700.apk \
+            --target "${{ github.sha }}" \
+            --title "Joy-Con pairing test APK for Lenovo Y700" \
+            --notes "Experimental debug-signed build for physical validation of paired Joy-Con input. Package: app.gamenative.joycontest. It can coexist with the official GameNative app. Do not use as a normal installation or enter production credentials." \
+            --prerelease
