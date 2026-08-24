@@ -7,6 +7,7 @@ import android.os.SystemClock;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.util.Log;
+import android.util.SparseArray;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -18,6 +19,7 @@ import com.winlator.inputcontrols.ControllerManager;
 import com.winlator.inputcontrols.ControlsProfile;
 import com.winlator.inputcontrols.ExternalController;
 import com.winlator.inputcontrols.GamepadState;
+import com.winlator.inputcontrols.JoyConSupport;
 import com.winlator.inputcontrols.TouchMouse;
 import com.winlator.math.XForm;
 import com.winlator.widget.InputControlsView;
@@ -57,6 +59,7 @@ public class WinHandler {
     public static final int MAX_PLAYERS = 4;
     private final MappedByteBuffer[] extraGamepadBuffers = new MappedByteBuffer[MAX_PLAYERS - 1];
     private final ExternalController[] extraControllers = new ExternalController[MAX_PLAYERS - 1];
+    private final SparseArray<ExternalController> sourceControllers = new SparseArray<>();
     private MappedByteBuffer gamepadBuffer;
     private static final short SERVER_PORT = 7947;
     private static final short CLIENT_PORT = 7946;
@@ -181,7 +184,9 @@ public class WinHandler {
 
     private void refreshControllerMappings(boolean clearDisconnectedSlots) {
         Log.d(TAG, "Refreshing controller assignments from settings...");
+        SparseArray<ExternalController> previousSourceControllers = sourceControllers.clone();
         currentController = null;
+        sourceControllers.clear();
         for (int i = 0; i < extraControllers.length; i++) {
             extraControllers[i] = null;
         }
@@ -213,6 +218,25 @@ public class WinHandler {
             setGamepadSlotConnected(i + 1, extraControllers[i] != null);
         }
 
+        for (int slot = 0; slot < MAX_PLAYERS; slot++) {
+            for (InputDevice device : controllerManager.getDevicesForSlot(slot)) {
+                ExternalController sourceController = previousSourceControllers.get(device.getId());
+                if (sourceController == null) {
+                    sourceController = createSourceController(device.getId());
+                } else {
+                    configureSourceController(sourceController, device);
+                }
+                if (sourceController != null) {
+                    sourceControllers.put(device.getId(), sourceController);
+                }
+            }
+            ExternalController outputController = getControllerFromSlot(slot);
+            if (outputController != null) {
+                updateCombinedSlotState(slot);
+                sendMemoryFileState(outputController, getGamepadBuffer(slot), slot);
+            }
+        }
+
         if (clearDisconnectedSlots) {
             clearDisconnectedGamepadSlots();
             sendGamepadState();
@@ -227,6 +251,10 @@ public class WinHandler {
         if (c != null) {
             c.setContext(activity);
             currentController = c;
+            if (sourceControllers.get(p1Device.getId()) == null) {
+                ExternalController source = createSourceController(p1Device.getId());
+                if (source != null) sourceControllers.put(p1Device.getId(), source);
+            }
         }
     }
 
@@ -235,6 +263,43 @@ public class WinHandler {
         if (slot < 0 || slot >= MAX_PLAYERS) return null;
 
         return extraControllers[slot -1];
+    }
+
+    private ExternalController getSourceController(int deviceId) {
+        ExternalController controller = sourceControllers.get(deviceId);
+        if (controller == null) {
+            controller = createSourceController(deviceId);
+            if (controller != null) sourceControllers.put(deviceId, controller);
+        }
+        return controller;
+    }
+
+    private ExternalController createSourceController(int deviceId) {
+        ExternalController controller = ExternalController.getController(deviceId);
+        if (controller == null) return null;
+        configureSourceController(controller, InputDevice.getDevice(deviceId));
+        return controller;
+    }
+
+    private void configureSourceController(ExternalController controller, InputDevice device) {
+        controller.setContext(activity);
+        if (JoyConSupport.isJoyCon(device)) {
+            controller.setTriggerType(ExternalController.TRIGGER_IS_BUTTON);
+        }
+    }
+
+    private GamepadState getCombinedStateForSlot(int slot) {
+        List<GamepadState> states = new ArrayList<>();
+        for (InputDevice device : controllerManager.getDevicesForSlot(slot)) {
+            ExternalController sourceController = sourceControllers.get(device.getId());
+            if (sourceController != null) states.add(sourceController.state);
+        }
+        return GamepadState.combine(states);
+    }
+
+    private void updateCombinedSlotState(int slot) {
+        ExternalController outputController = getControllerFromSlot(slot);
+        if (outputController != null) outputController.state.copy(getCombinedStateForSlot(slot));
     }
 
     private MappedByteBuffer getGamepadBuffer(int slot) {
@@ -957,18 +1022,12 @@ public class WinHandler {
         boolean handled = false;
         int slot = controllerManager.getSlotForDevice(event.getDeviceId());
         if (slot >= 0) {
-            ExternalController controller = getControllerFromSlot(slot);
-            if (controller == null || controller.getDeviceId() != event.getDeviceId()) {
-                Log.d(TAG, "Motion event refresh for deviceId=" + event.getDeviceId()
-                        + " slot=" + slot
-                        + " controller=" + (controller != null ? controller.getDeviceId() : -1));
-                refreshControllerMappings();
-                controller = getControllerFromSlot(slot);
-            }
-            if (controller != null && controller.getDeviceId() == event.getDeviceId()) {
+            ExternalController controller = getSourceController(event.getDeviceId());
+            if (controller != null) {
                 handled = controller.updateStateFromMotionEvent(event);
                 if (handled) {
-                    sendMemoryFileState(controller, getGamepadBuffer(slot), slot);
+                    updateCombinedSlotState(slot);
+                    sendMemoryFileState(getControllerFromSlot(slot), getGamepadBuffer(slot), slot);
                     sendGamepadState();
                 }
                 return handled;
@@ -1016,24 +1075,18 @@ public class WinHandler {
         InputDevice device = event.getDevice();
 
         if (slot >= 0) {
-            ExternalController controller = getControllerFromSlot(slot);
-            if (controller == null || controller.getDeviceId() != event.getDeviceId()) {
-                Log.d(TAG, "Key event refresh for deviceId=" + event.getDeviceId()
-                        + " slot=" + slot
-                        + " controller=" + (controller != null ? controller.getDeviceId() : -1));
-                refreshControllerMappings();
-                controller = getControllerFromSlot(slot);
-            }
-            if (controller != null && controller.getDeviceId() == event.getDeviceId()) {
+            ExternalController controller = getSourceController(event.getDeviceId());
+            if (controller != null) {
                 if (event.getRepeatCount() > 0) return true;
-                handled = controller.updateStateFromKeyEvent(event); // or motion variant
+                handled = controller.updateStateFromKeyEvent(event);
                 Log.d(TAG, "Key routed deviceId=" + event.getDeviceId()
-                        + " keyCode=" + event.getKeyCode()
+                        + " keyCode=" + JoyConSupport.remapKeyCode(event.getDevice(), event)
                         + " action=" + event.getAction()
                         + " -> P" + (slot + 1)
                         + " handled=" + handled
                         + " buffer=" + (getGamepadBuffer(slot) != null));
-                sendMemoryFileState(controller, getGamepadBuffer(slot), slot);
+                updateCombinedSlotState(slot);
+                sendMemoryFileState(getControllerFromSlot(slot), getGamepadBuffer(slot), slot);
                 if (handled) sendGamepadState();
                 return handled;
             }
