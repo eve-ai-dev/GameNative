@@ -40,10 +40,10 @@ jobs:
         run: ./gradlew :app:testLegacyDebugUnitTest :app:testModernDebugUnitTest --tests com.winlator.inputcontrols.JoyConSupportTest
 
       - name: Build isolated modern APK
-        run: ./gradlew :app:assembleModernDebug
+        run: ./gradlew :app:assembleModernRelease
 
       - name: Stage artifact
-        run: cp app/build/outputs/apk/modern/debug/app-modern-debug.apk GameNative-JoyCon-Test-Y700.apk
+        run: cp app/build/outputs/apk/modern/release/app-modern-release.apk GameNative-JoyCon-Test-Y700.apk
 
       - name: Upload test APK
         uses: actions/upload-artifact@v4
