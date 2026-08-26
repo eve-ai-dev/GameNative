@@ -59,6 +59,7 @@ public class ControllerManager {
     // e.g., key=0, value="vendor_123_product_456"
     private final SparseArray<String> slotAssignments = new SparseArray<>();
     private final Map<String, Integer> lastKnownSlotByIdentifier = new HashMap<>();
+    private final Map<String, Integer> pairedJoyConSlotByIdentifier = new HashMap<>();
 
     // This tracks which of the 4 player slots are enabled by the user.
     private final boolean[] enabledSlots = new boolean[MAX_SLOTS];
@@ -78,6 +79,7 @@ public class ControllerManager {
 
     public static final String PREF_PLAYER_SLOT_PREFIX = "controller_slot_";
     public static final String PREF_ENABLED_SLOTS_PREFIX = "enabled_slot_";
+    private static final String PREF_JOY_CON_PAIR_MEMBERS_PREFIX = "joy_con_pair_members_";
 
 
     /**
@@ -144,6 +146,7 @@ public class ControllerManager {
     private void loadAssignments() {
         slotAssignments.clear();
         lastKnownSlotByIdentifier.clear();
+        pairedJoyConSlotByIdentifier.clear();
         for (int i = 0; i < MAX_SLOTS; i++) {
             // Load which device is assigned to this slot
             String prefKey = PREF_PLAYER_SLOT_PREFIX + i;
@@ -151,6 +154,11 @@ public class ControllerManager {
             if (deviceIdentifier != null) {
                 slotAssignments.put(i, deviceIdentifier);
                 lastKnownSlotByIdentifier.put(deviceIdentifier, i);
+            }
+            for (String pairMember : preferences.getStringSet(
+                    PREF_JOY_CON_PAIR_MEMBERS_PREFIX + i, java.util.Collections.emptySet())) {
+                pairedJoyConSlotByIdentifier.put(pairMember, i);
+                lastKnownSlotByIdentifier.put(pairMember, i);
             }
 
             // Load whether this slot is enabled. Default P1=true, P2-4=false.
@@ -172,6 +180,17 @@ public class ControllerManager {
                 editor.putString(prefKey, deviceIdentifier);
             } else {
                 editor.remove(prefKey);
+            }
+
+            Set<String> pairMembers = new HashSet<>();
+            for (Map.Entry<String, Integer> entry : pairedJoyConSlotByIdentifier.entrySet()) {
+                if (entry.getValue() == i) pairMembers.add(entry.getKey());
+            }
+            String pairMembersKey = PREF_JOY_CON_PAIR_MEMBERS_PREFIX + i;
+            if (pairMembers.isEmpty()) {
+                editor.remove(pairMembersKey);
+            } else {
+                editor.putStringSet(pairMembersKey, pairMembers);
             }
 
             // Save the enabled state
@@ -297,6 +316,11 @@ public class ControllerManager {
             }
         }
 
+        // A different physical controller taking this slot invalidates stale Joy-Con pair memory.
+        if (!Integer.valueOf(slotIndex).equals(pairedJoyConSlotByIdentifier.get(newDeviceIdentifier))) {
+            pairedJoyConSlotByIdentifier.entrySet().removeIf(entry -> entry.getValue() == slotIndex);
+        }
+
         // Assign the new device to the target slot.
         slotAssignments.put(slotIndex, newDeviceIdentifier);
         lastKnownSlotByIdentifier.put(newDeviceIdentifier, slotIndex);
@@ -314,6 +338,7 @@ public class ControllerManager {
             lastKnownSlotByIdentifier.put(deviceIdentifier, slotIndex);
         }
         slotAssignments.remove(slotIndex);
+        pairedJoyConSlotByIdentifier.entrySet().removeIf(entry -> entry.getValue() == slotIndex);
         markSlotRecentlyFreed(slotIndex);
         saveAssignments();
         notifySlotsChanged();
@@ -330,12 +355,16 @@ public class ControllerManager {
         if (deviceIdentifier == null) return -1;
 
         int directSlot = getSlotForIdentifier(deviceIdentifier);
-        if (directSlot >= 0 || !JoyConSupport.isJoyCon(device)) return directSlot;
-
         InputDevice complementaryJoyCon = findComplementaryJoyCon(device);
-        return complementaryJoyCon == null
+        int complementaryDirectSlot = complementaryJoyCon == null
                 ? -1
                 : getSlotForIdentifier(getDeviceIdentifier(complementaryJoyCon));
+        return JoyConSupport.resolveLogicalSlot(
+                JoyConSupport.isJoyCon(device),
+                directSlot,
+                complementaryDirectSlot,
+                pairedJoyConSlotByIdentifier.getOrDefault(deviceIdentifier, -1),
+                getConnectedJoyConCount());
     }
 
     public boolean isPairedJoyCon(int deviceId) {
@@ -364,6 +393,29 @@ public class ControllerManager {
             }
         }
         return match;
+    }
+
+    private int getConnectedJoyConCount() {
+        int count = 0;
+        for (InputDevice device : detectedDevices) {
+            if (JoyConSupport.isJoyCon(device)) count++;
+        }
+        return count;
+    }
+
+    private boolean rememberJoyConPairSlot(InputDevice device, int slot) {
+        InputDevice complement = findComplementaryJoyCon(device);
+        if (slot < 0 || complement == null) return false;
+        String identifier = getDeviceIdentifier(device);
+        String complementIdentifier = getDeviceIdentifier(complement);
+        if (identifier == null || complementIdentifier == null) return false;
+        boolean changed = !Integer.valueOf(slot).equals(pairedJoyConSlotByIdentifier.get(identifier))
+                || !Integer.valueOf(slot).equals(pairedJoyConSlotByIdentifier.get(complementIdentifier));
+        pairedJoyConSlotByIdentifier.put(identifier, slot);
+        pairedJoyConSlotByIdentifier.put(complementIdentifier, slot);
+        lastKnownSlotByIdentifier.put(identifier, slot);
+        lastKnownSlotByIdentifier.put(complementIdentifier, slot);
+        return changed;
     }
 
     /**
@@ -397,6 +449,8 @@ public class ControllerManager {
         slotAssignments.remove(releasedSlot);
         lastKnownSlotByIdentifier.put(firstIdentifier, ownerSlot);
         lastKnownSlotByIdentifier.put(secondIdentifier, ownerSlot);
+        pairedJoyConSlotByIdentifier.put(firstIdentifier, ownerSlot);
+        pairedJoyConSlotByIdentifier.put(secondIdentifier, ownerSlot);
         markSlotRecentlyFreed(releasedSlot);
         Log.i(TAG, "Collapsed legacy split Joy-Con assignments into Player " + (ownerSlot + 1));
         return true;
@@ -498,6 +552,9 @@ public class ControllerManager {
         }
         int existing = getSlotForDevice(deviceId);
         if (existing >= 0) {
+            if (rememberJoyConPairSlot(device, existing)) {
+                saveAssignments();
+            }
             return;
         }
 
@@ -528,7 +585,12 @@ public class ControllerManager {
         boolean changed = collapseLegacyJoyConPairAssignments();
         for (InputDevice device : detectedDevices) {
             String deviceIdentifier = getDeviceIdentifier(device);
-            if (deviceIdentifier == null || getSlotForDevice(device.getId()) >= 0) {
+            int logicalSlot = getSlotForDevice(device.getId());
+            if (deviceIdentifier == null) {
+                continue;
+            }
+            if (logicalSlot >= 0) {
+                changed |= rememberJoyConPairSlot(device, logicalSlot);
                 continue;
             }
 
