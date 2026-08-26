@@ -74,6 +74,22 @@ public final class JoyConSupport {
         return (firstDirectSlot >= 0) != (secondDirectSlot >= 0);
     }
 
+    /**
+     * Resolves a Joy-Con's logical player slot without letting persisted pair metadata fuse an
+     * ambiguous multi-pair topology. A lone surviving half may reuse the pair's persisted slot.
+     */
+    public static int resolveLogicalSlot(
+            boolean isJoyCon,
+            int directSlot,
+            int complementaryDirectSlot,
+            int persistedPairSlot,
+            int connectedJoyConCount
+    ) {
+        if (directSlot >= 0 || !isJoyCon) return directSlot;
+        if (complementaryDirectSlot >= 0) return complementaryDirectSlot;
+        return connectedJoyConCount == 1 ? persistedPairSlot : -1;
+    }
+
     /** Returns the slot to retain when migrating a legacy split assignment, or -1 if not needed. */
     public static int getLegacyPairOwnerSlot(int firstDirectSlot, int secondDirectSlot) {
         return firstDirectSlot >= 0 && secondDirectSlot >= 0 && firstDirectSlot != secondDirectSlot

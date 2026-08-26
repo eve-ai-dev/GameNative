@@ -96,6 +96,14 @@ class JoyConSupportTest {
         assertEquals(-1, JoyConSupport.getLegacyPairOwnerSlot(2, 2))
     }
 
+    @Test
+    fun `surviving half recovers persisted pair slot without fusing ambiguous topology`() {
+        assertEquals(2, JoyConSupport.resolveLogicalSlot(true, -1, -1, 2, 1))
+        assertEquals(-1, JoyConSupport.resolveLogicalSlot(true, -1, -1, 2, 4))
+        assertEquals(1, JoyConSupport.resolveLogicalSlot(true, -1, 1, 2, 2))
+        assertEquals(-1, JoyConSupport.resolveLogicalSlot(false, -1, -1, 2, 1))
+    }
+
 
     @Test
     fun `maps left Joy-Con Linux scan codes to Android controls`() {
