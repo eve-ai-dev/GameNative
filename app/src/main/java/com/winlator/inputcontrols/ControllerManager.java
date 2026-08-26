@@ -757,7 +757,11 @@ public class ControllerManager {
     }
 
     private boolean isSlotAvailable(int slot) {
-        return slot >= 0 && slot < MAX_SLOTS && getAssignedDeviceForSlot(slot) == null;
+        if (slot < 0 || slot >= MAX_SLOTS) return false;
+        for (InputDevice device : detectedDevices) {
+            if (getSlotForDevice(device.getId()) == slot) return false;
+        }
+        return true;
     }
 
     private int getPreferredFreeSlot(String deviceIdentifier) {
