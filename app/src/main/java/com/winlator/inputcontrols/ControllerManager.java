@@ -316,6 +316,12 @@ public class ControllerManager {
             }
         }
 
+        // Moving a remembered Joy-Con member invalidates the pair's previous logical slot.
+        Integer previousPairSlot = pairedJoyConSlotByIdentifier.get(newDeviceIdentifier);
+        if (previousPairSlot != null && previousPairSlot != slotIndex) {
+            pairedJoyConSlotByIdentifier.entrySet().removeIf(entry -> entry.getValue().equals(previousPairSlot));
+        }
+
         // A different physical controller taking this slot invalidates stale Joy-Con pair memory.
         if (!Integer.valueOf(slotIndex).equals(pairedJoyConSlotByIdentifier.get(newDeviceIdentifier))) {
             pairedJoyConSlotByIdentifier.entrySet().removeIf(entry -> entry.getValue() == slotIndex);
