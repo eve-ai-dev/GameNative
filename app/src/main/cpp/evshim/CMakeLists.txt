@@ -3,7 +3,8 @@ project(evshim C)
 
 set(CMAKE_C_STANDARD 11)
 
-set(SDL2_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/../third_party)
+set(SDL2_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/../third_party" CACHE PATH
+        "Path containing the SDL2 include directory")
 
 add_library(evshim SHARED evshim.c)
 
