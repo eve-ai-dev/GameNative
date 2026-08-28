@@ -51,6 +51,7 @@ jobs:
           sparse-checkout: include
       - name: Build isolated-storage evshim bridge
         run: |
+          set -o pipefail
           NDK_VERSION=27.3.13750724
           NDK_DIR="$ANDROID_SDK_ROOT/ndk/$NDK_VERSION"
           if [ ! -d "$NDK_DIR" ]; then
@@ -62,7 +63,11 @@ jobs:
             -DANDROID_PLATFORM=android-29 \
             -DSDL2_INCLUDE_DIR="$GITHUB_WORKSPACE/app/build/SDL/include" \
             -DCMAKE_BUILD_TYPE=Release
-          cmake --build app/build/evshim --parallel 2
+          if ! cmake --build app/build/evshim --parallel 2 2>&1 | tee app/build/evshim-build.log; then
+            message=$(tail -c 1500 app/build/evshim-build.log | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
+            printf '::error file=app/src/main/cpp/evshim/evshim.c::%s\n' "$message"
+            exit 1
+          fi
           install -m 0755 app/build/evshim/libevshim.so app/src/main/jniLibs/arm64-v8a/libevshim.so
           nm -D app/src/main/jniLibs/arm64-v8a/libevshim.so | grep -q Java_com_winlator_winhandler_WinHandler_initializeSharedMemory
       - name: Run focused Joy-Con unit tests
