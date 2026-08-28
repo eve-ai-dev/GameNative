@@ -73,10 +73,41 @@ jobs:
       - name: Run focused Joy-Con unit tests
         timeout-minutes: 12 # Full dual-flavor suite exceeded 35 minutes; focused compile previously failed in under 4.
         run: ./gradlew :app:testLegacyDebugUnitTest --tests com.winlator.inputcontrols.JoyConSupportTest --no-daemon --max-workers=2
+      - name: Configure stable Joy-Con test signing
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          JOYCON_KEYSTORE_B64: ${{ secrets.JOYCON_KEYSTORE_B64 }}
+          JOYCON_KEY_ALIAS: ${{ secrets.JOYCON_KEY_ALIAS }}
+          JOYCON_KEYSTORE_PASSWORD: ${{ secrets.JOYCON_KEYSTORE_PASSWORD }}
+          JOYCON_KEY_PASSWORD: ${{ secrets.JOYCON_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$JOYCON_KEYSTORE_B64"
+          test -n "$JOYCON_KEY_ALIAS"
+          test -n "$JOYCON_KEYSTORE_PASSWORD"
+          test -n "$JOYCON_KEY_PASSWORD"
+          mkdir -p app/keystores
+          printf '%s' "$JOYCON_KEYSTORE_B64" | base64 --decode > app/keystores/joycontest.p12
+          {
+            printf 'storeFile=keystores/joycontest.p12\n'
+            printf 'storePassword=%s\n' "$JOYCON_KEYSTORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$JOYCON_KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$JOYCON_KEY_PASSWORD"
+          } > app/keystores/joycontest.properties
       - name: Build isolated Modern release APK
         if: github.event_name == 'workflow_dispatch'
         timeout-minutes: 35
-        run: ./gradlew :app:assembleModernRelease --no-daemon --max-workers=2
+        env:
+          JOYCON_VERSION_CODE: ${{ github.run_number }}
+        run: ./gradlew :app:assembleModernRelease -PjoyConVersionCode=$((100000 + JOYCON_VERSION_CODE)) --no-daemon --max-workers=2
+      - name: Verify isolated APK signature
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          APK=$(find app/build/outputs/apk/modern/release -name '*.apk' -type f -print -quit)
+          test -n "$APK"
+          APKSIGNER=$(find "$ANDROID_SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -1)
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
       - name: Upload isolated Modern release APK
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
