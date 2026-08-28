@@ -9,6 +9,7 @@ on:
       - 'keyvalues/**'
       - 'media/**'
       - '.github/ISSUE_TEMPLATE/**'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -44,3 +45,14 @@ jobs:
       - name: Run focused Joy-Con unit tests
         timeout-minutes: 12 # Full dual-flavor suite exceeded 35 minutes; focused compile previously failed in under 4.
         run: ./gradlew :app:testLegacyDebugUnitTest --tests com.winlator.inputcontrols.JoyConSupportTest --no-daemon --max-workers=2
+      - name: Build Legacy debug APK
+        if: github.event_name == 'workflow_dispatch'
+        timeout-minutes: 35
+        run: ./gradlew :app:assembleLegacyDebug --no-daemon --max-workers=2
+      - name: Upload Legacy debug APK
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamenative-joycon-legacy-debug-${{ github.sha }}
+          path: app/build/outputs/apk/legacy/debug/*.apk
+          if-no-files-found: error
