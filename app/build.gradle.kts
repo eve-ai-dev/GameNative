@@ -20,6 +20,14 @@ val keystoreProperties: Properties? = if (keystorePropertiesFile.exists()) {
     }
 } else null
 
+val joyConKeystorePropertiesFile = rootProject.file("app/keystores/joycontest.properties")
+val joyConKeystoreProperties: Properties? = if (joyConKeystorePropertiesFile.exists()) {
+    Properties().apply {
+        load(FileInputStream(joyConKeystorePropertiesFile))
+    }
+} else null
+val joyConVersionCode = providers.gradleProperty("joyConVersionCode").orNull?.toIntOrNull()
+
 // Add PostHog API key and host as build-time variables
 val posthogApiKey: String = project.findProperty("POSTHOG_API_KEY") as String? ?: System.getenv("POSTHOG_API_KEY") ?: ""
 val posthogHost: String = project.findProperty("POSTHOG_HOST") as String? ?: System.getenv("POSTHOG_HOST") ?: "https://us.i.posthog.com"
@@ -53,6 +61,14 @@ android {
                 keyPassword = keystoreProperties["keyPassword"].toString()
             }
         }
+        create("joycontest") {
+            if (joyConKeystoreProperties != null) {
+                storeFile = file(joyConKeystoreProperties["storeFile"].toString())
+                storePassword = joyConKeystoreProperties["storePassword"].toString()
+                keyAlias = joyConKeystoreProperties["keyAlias"].toString()
+                keyPassword = joyConKeystoreProperties["keyPassword"].toString()
+            }
+        }
     }
 
     defaultConfig {
@@ -64,7 +80,7 @@ android {
         buildConfigField("boolean", "XR_BUILD", "false")
         buildConfigField("boolean", "MODERN_XR", "false")
 
-        versionCode = 22
+        versionCode = joyConVersionCode ?: 22
         versionName = "1.2.0"
 
         buildConfigField("boolean", "GOLD", "false")
@@ -171,7 +187,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (joyConKeystoreProperties != null) "joycontest" else "debug")
             applicationIdSuffix = ".joycontest"
             versionNameSuffix = "-joycon-test"
         }
