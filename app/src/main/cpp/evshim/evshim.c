@@ -15,7 +15,7 @@
 #include <linux/futex.h>
 #include <sys/syscall.h>
 #include <jni.h>
-#include <SDL2/SDL.h>
+#include <SDL.h>
 #include <android/log.h>
 #include <sys/stat.h>
 #include <time.h>
