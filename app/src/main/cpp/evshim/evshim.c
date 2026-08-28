@@ -77,11 +77,16 @@ static SDL_JoystickID vjoy_instances[MAX_GAMEPADS];
 static size_t g_shm_map_size = 0;
 static int g_is_wine = 0;
 
-static void build_gamepad_dir(char *out, size_t size)
+static void build_gamepad_dir(char *out, size_t size, const char *explicit_base)
 {
-    const char *base = getenv("EVSHIM_BASE_PATH");
+    const char *base = explicit_base;
 
-    // fallback
+    if (!base || !*base) {
+        base = getenv("EVSHIM_BASE_PATH");
+    }
+
+    // The Wine process receives EVSHIM_BASE_PATH before libevshim is loaded.
+    // Android's app process does not, so JNI must provide its sandbox explicitly.
     if (!base || !*base) {
         base = "/data/data/app.gamenative/files";
     }
@@ -111,20 +116,21 @@ static int mkdir_gameshm(const char *path)
 
 // mmap setup
 // java side still need to get the shm here to get the futex word address
-static void setup_shm(int players)
+static int setup_shm(int players, const char *explicit_base)
 {
     g_shm_map_size = (size_t)sysconf(_SC_PAGESIZE);
 
     char gamepad_dir[PATH_MAX];
-    build_gamepad_dir(gamepad_dir, sizeof(gamepad_dir));
+    build_gamepad_dir(gamepad_dir, sizeof(gamepad_dir), explicit_base);
 
     if (mkdir_gameshm(gamepad_dir) < 0) {
         LOGE("evshim: failed to create/check dir '%s': %s\n",
              gamepad_dir,
              strerror(errno));
-        return;
+        return -1;
     }
 
+    int mapped = 0;
     for (int i = 0; i < players; i++) {
         char path[PATH_MAX];
         snprintf(path, sizeof(path),
@@ -168,7 +174,10 @@ static void setup_shm(int players)
             ALOGI("evshim: resetting controller state");
             memset(shm[i], 0, sizeof(struct gamepad_io));
         }
+        mapped++;
     }
+
+    return mapped == players ? 0 : -1;
 }
 
 static void        *sdl_handle = NULL;
@@ -423,14 +432,43 @@ static void initialize_all_pads(void)
         vjoy_instances[i] = -1;
     }
 
-    setup_shm(players);
-
     if (g_is_wine) {
+        setup_shm(players, NULL);
         LOGI("evshim: Wine process init (%d player(s))\n", players);
         initialize_wine(players);
     } else {
-        ALOGI("evshim: Java process init (%d player(s))\n", players);
+        ALOGI("evshim: Java process awaiting explicit app storage initialization");
     }
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_winlator_winhandler_WinHandler_initializeSharedMemory(
+        JNIEnv *env, jclass cls, jstring base_path, jint players)
+{
+    (void)cls;
+    if (g_is_wine || !base_path || players <= 0) return JNI_FALSE;
+
+    if (players > MAX_GAMEPADS) players = MAX_GAMEPADS;
+    int already_mapped = 1;
+    for (int i = 0; i < players; i++) {
+        if (!shm[i]) {
+            already_mapped = 0;
+            break;
+        }
+    }
+    if (already_mapped) return JNI_TRUE;
+
+    const char *base = (*env)->GetStringUTFChars(env, base_path, NULL);
+    if (!base) return JNI_FALSE;
+
+    int result = setup_shm(players, base);
+    if (result == 0) {
+        ALOGI("evshim: Java shared memory initialized at %s/gamepad_shm", base);
+    } else {
+        ALOGE("evshim: Java shared memory initialization failed at %s/gamepad_shm", base);
+    }
+    (*env)->ReleaseStringUTFChars(env, base_path, base);
+    return result == 0 ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL

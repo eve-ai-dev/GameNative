@@ -42,6 +42,21 @@ jobs:
         uses: gradle/actions/wrapper-validation@v4
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+      - name: Build isolated-storage evshim bridge
+        run: |
+          NDK_VERSION=27.3.13750724
+          NDK_DIR="$ANDROID_SDK_ROOT/ndk/$NDK_VERSION"
+          if [ ! -d "$NDK_DIR" ]; then
+            "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION"
+          fi
+          cmake -S app/src/main/cpp/evshim -B app/build/evshim \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK_DIR/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-29 \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build app/build/evshim --parallel 2
+          install -m 0755 app/build/evshim/libevshim.so app/src/main/jniLibs/arm64-v8a/libevshim.so
+          nm -D app/src/main/jniLibs/arm64-v8a/libevshim.so | grep -q Java_com_winlator_winhandler_WinHandler_initializeSharedMemory
       - name: Run focused Joy-Con unit tests
         timeout-minutes: 12 # Full dual-flavor suite exceeded 35 minutes; focused compile previously failed in under 4.
         run: ./gradlew :app:testLegacyDebugUnitTest --tests com.winlator.inputcontrols.JoyConSupportTest --no-daemon --max-workers=2
