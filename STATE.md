@@ -1,6 +1,6 @@
 # Project state
 
-Updated: `2026-08-30 13:34 UTC`
+Updated: `2026-08-30 13:52 UTC`
 
 ## Target
 
@@ -11,28 +11,30 @@ Updated: `2026-08-30 13:34 UTC`
 ## Current truth
 
 - Functional version: `0.1.0` — paired Joy-Con Y700 isolated build.
-- Status: `functional` for the existing baseline; `0.2.0` is building.
-- Branch: `y700/stable` at `5565d60a175acb775707bb41a19d6322f31d0b39`, matching `fork/y700/stable` when last checked.
-- Upstream/fork status: `origin/master` is two commits ahead of `fork/master`; `y700/stable` is two upstream commits behind and carries fifteen branch commits over the previous merge base.
-- Current dependency wave: synchronize the two current upstream commits before PR integration.
-- Completed: paired Joy-Con logical-controller support; claim/reconnect/player-slot regression fixes; isolated package `app.gamenative.joycontest`; app-private `evshim`; stable-signing workflow; full Legacy+Modern PR test gate; portable project-agent governance and validation contract.
+- Status: `functional` for the existing baseline; `0.2.0` is a CI-ready candidate pending same-head remote verification and Y700 hardware observation.
+- Branch: `y700/stable`; resolve the exact candidate with `git rev-parse HEAD` rather than copying a stale SHA into this mutable file.
+- Upstream/fork status: `origin/master` at `c76d3ddc6dec902cb55c4d2d720718f4db03e492` is an ancestor of the branch through merge commit `e99e4105`.
+- PR evaluation: all 60 open upstream PRs were classified in `outputs/upstream-pr-evaluation.md`. Only #1599 was selected now; its focused Epic tablet-overhead improvements were adapted in `a5491ddf` without replacing newer resume/external-storage behavior.
+- Completed: paired Joy-Con logical-controller support; claim/reconnect/player-slot regression fixes; isolated package `app.gamenative.joycontest`; app-private `evshim`; stable-signing workflow; upstream synchronization; complete open-PR inventory; selected Epic optimization; portable project-agent governance and validation contract.
+- CI contract: workflow dispatch now runs the native bridge gate and Legacy+Modern tests before building, signing, verifying, and uploading the isolated Modern APK (`9e826881`).
 - Blockers: local runtime currently has no Java executable and no `JAVA_HOME`/`ANDROID_SDK_ROOT`; local Gradle validation cannot run until the Android toolchain is available. GitHub CI remains the proven build environment.
-- Material limitations: hardware verification is from the prior Joy-Con baseline, not any future upstream/PR integration; 60 upstream PRs were open at the start of this work and still require evidence-based triage.
+- Material limitations: hardware verification remains from the prior Joy-Con baseline, not this upstream/PR candidate. The Y700 thermal improvement claimed by #1599 still needs a real device measurement.
 
 ## Next action
 
-- Action: finish and verify this governance retrofit, then merge the two current upstream commits into `y700/stable` while preserving Y700-specific contracts.
-- Depends on: project-agent files passing schema/diff checks.
-- Write surface: `AGENTS.md`, `STATE.md`, `.agents/`, `plans/`, `decisions/`, `outputs/`; then upstream-touched product files under explicit review.
-- Acceptance evidence: commands and observations declared in `.agents/validation.md` plus clean Git state/diff inspection.
+- Action: push the candidate to `fork/y700/stable`, run the authorized full delivery workflow, and bind the resulting tests/APK/signature evidence to the exact pushed head.
+- Depends on: fork push and GitHub Actions availability.
+- Write surface: fork branch and generated `outputs/ci/` evidence only; no upstream mutation or release publication.
+- Acceptance evidence: commands and observations declared in `.agents/validation.md`, matching workflow `headSha`, clean Git state, and the manual Y700 gate when Alberto installs the candidate.
 
 ## Validation
 
 - Contract: `.agents/validation.md`.
-- Latest behavioral result: GitHub Actions run `33312569000` completed successfully for head `5565d60a`; it built, signed, verified, and uploaded the isolated Modern APK.
-- Latest full tests: GitHub Actions run `33308448387` completed the Legacy + Modern unit-test gate successfully for Joy-Con head `095d6f02`.
-- Evidence artifacts: `https://github.com/eve-ai-dev/GameNative/actions/runs/33312569000`; `https://github.com/eve-ai-dev/GameNative/actions/runs/33308448387`; generated governance quality evidence under `outputs/`.
-- Skipped applicable checks: local Gradle tests/build, because Java and Android SDK variables are absent in this runtime; no new product code is part of the governance retrofit.
+- Previous behavioral result: GitHub Actions run `33312569000` completed successfully for baseline head `5565d60a`; it built, signed, verified, and uploaded the isolated Modern APK.
+- Previous full tests: GitHub Actions run `33308448387` completed the Legacy + Modern unit-test gate successfully for Joy-Con head `095d6f02`.
+- Candidate evidence rule: use the latest successful `workflow_dispatch` run whose `headSha` exactly equals `git rev-parse HEAD`; older URLs are baseline evidence only.
+- Deterministic report: `outputs/quality-report.json` currently reports `QUALITY_INCOMPLETE` solely because the source adapter cannot inspect upstream's prebuilt ARM64 `libredirect-bionic-wx-minimal.so`; the file matches the exact `origin/master` Git blob and has SHA-256 `557aacc4a8b9e0dccb5e6d43aecca7b1723c0095f9bcb24fc5efe0db5390ff41`.
+- Skipped applicable checks: local Gradle tests/build, because Java and Android SDK variables are absent in this runtime. Remote CI is mandatory for the candidate.
 
 ## Authority gate
 
