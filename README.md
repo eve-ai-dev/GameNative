@@ -59,6 +59,10 @@ It's still early. Not every game runs yet, and some need tweaking to play well, 
 4. Install your game
 5. Hit play and enjoy
 
+## Documentation
+
+The code-grounded [technical documentation](docs/README.md) explains the graphics stack, present modes, Box64/FEXCore behavior, diagnostics, and the maintained Lenovo Legion Y700 Gen 3 fork.
+
 ## Support
 
 The fastest way to get help is the [Discord server](https://discord.gg/2hKv4VfZfE) — we're 35k+ strong and someone's usually around.
