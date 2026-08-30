@@ -41,6 +41,5 @@ jobs:
         uses: gradle/actions/wrapper-validation@v4
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-      - name: Run focused Joy-Con unit tests
-        timeout-minutes: 12 # Full dual-flavor suite exceeded 35 minutes; focused compile previously failed in under 4.
-        run: ./gradlew :app:testLegacyDebugUnitTest --tests com.winlator.inputcontrols.JoyConSupportTest --no-daemon --max-workers=2
+      - name: Run unit tests
+        run: ./gradlew :app:testLegacyDebugUnitTest :app:testModernDebugUnitTest

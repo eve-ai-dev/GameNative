@@ -710,7 +710,9 @@ public class ControllerManager {
         if (slot == 0) return false;
         InputDevice occupant = getAssignedDeviceForSlot(0);
         if (occupant == null) {
-            String deviceIdentifier = getDeviceIdentifierForDeviceId(deviceId);
+            String deviceIdentifier = JoyConSupport.resolveClaimOwnerIdentifier(
+                    getSlotOwnerIdentifier(deviceId),
+                    getDeviceIdentifierForDeviceId(deviceId));
             if (deviceIdentifier == null) return false;
             assignDeviceIdentifierToSlot(0, deviceIdentifier);
             saveAssignments();

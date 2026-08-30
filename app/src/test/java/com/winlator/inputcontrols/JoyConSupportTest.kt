@@ -104,6 +104,12 @@ class JoyConSupportTest {
         assertEquals(-1, JoyConSupport.resolveLogicalSlot(false, -1, -1, 2, 1))
     }
 
+    @Test
+    fun `non-owner half moves the logical pair owner when claiming player one`() {
+        assertEquals("left-owner", JoyConSupport.resolveClaimOwnerIdentifier("left-owner", "right-half"))
+        assertEquals("ordinary-controller", JoyConSupport.resolveClaimOwnerIdentifier(null, "ordinary-controller"))
+    }
+
 
     @Test
     fun `maps left Joy-Con Linux scan codes to Android controls`() {
