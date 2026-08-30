@@ -42,6 +42,10 @@ APK=$(find app/build/outputs/apk/modern/release -name '*.apk' -type f -print -qu
 test -n "$APK"
 APKSIGNER=$(find "$ANDROID_SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -1)
 "$APKSIGNER" verify --verbose --print-certs "$APK"
+AAPT=$(find "$ANDROID_SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -1)
+test -n "$AAPT"
+PACKAGE=$($AAPT dump badging "$APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")
+test "$PACKAGE" = "app.gamenative.joycontest"
 sha256sum "$APK"
 ```
 
