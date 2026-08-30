@@ -6,13 +6,14 @@ Baseline: `origin/master` at `c76d3ddc6dec902cb55c4d2d720718f4db03e492`, merged 
 
 ## Decision
 
-Integrate one focused change now: [#1599](https://github.com/utkarshdalal/GameNative/pull/1599), adapted rather than merged because its branch is stale/conflicting and would regress newer Epic resume and external-storage behavior. Keep nine potentially relevant PRs deferred behind device, maturity, or conflict gates. Reject the other fifty for this Y700 delivery lane.
+Integrate two focused changes: [#1599](https://github.com/utkarshdalal/GameNative/pull/1599), adapted rather than merged because its branch is stale/conflicting and would regress newer Epic resume and external-storage behavior; and [#1719](https://github.com/utkarshdalal/GameNative/pull/1719), cherry-picked because its current two-commit delta is focused, mergeable, and green upstream. Keep nine potentially relevant PRs deferred behind device, maturity, or conflict gates. Reject the remaining candidates for this Y700 delivery lane.
 
 The screen is intentionally strict. “Could be useful on Android” is not enough; the change must justify its regression and maintenance surface on the Y700/Joy-Con branch.
 
 ## Integrated
 
 - [#1599](https://github.com/utkarshdalal/GameNative/pull/1599) — **integrate, P1** — reduces Epic downloader hot-path logging, progress-update frequency, and repeated chunk-to-file scans. The author reported tablet CPU dropping from roughly 180–225% to 96–129%, threads from ~127 to ~70–73, and CPU0 from ~63°C to ~43–45°C during a large real download. Head `633113d1271dafba62fa9531ec45c61412788f0c`; upstream CI passed. Adapted in local commit `a5491ddf` while preserving current internal chunk cache, resumable-file verification, exFAT allocation behavior, and storage-space checks. Y700 thermal benefit remains a hardware-validation claim, not yet proven locally.
+- [#1719](https://github.com/utkarshdalal/GameNative/pull/1719) — **integrate, P1** — reduces Steam PICS refresh memory pressure by selecting only `packageId` and `access_token` from Room instead of materializing complete license records, and replaces hard-coded 500-item chunks with the existing `MAX_PICS_BUFFER`. The PR is mergeable, changes three Kotlin files by 22 additions/3 deletions, and its upstream build/review checks passed. Cherry-picked with original authorship as `edc88cc5` and `d3c8092b`; the latter also removes an unused import introduced by the first commit.
 
 ## Deferred candidates
 
@@ -56,7 +57,7 @@ The screen is intentionally strict. “Could be useful on Android” is not enou
 - [#1757](https://github.com/utkarshdalal/GameNative/pull/1757) — **reject** — shared containers materially change isolation semantics.
 - [#1742](https://github.com/utkarshdalal/GameNative/pull/1742) — **reject** — native Android game builds/Steam Frame are a different product surface.
 - [#1721](https://github.com/utkarshdalal/GameNative/pull/1721) — **reject** — large library/PICS optimization superseded in part by newer focused work; no controller/runtime benefit.
-- [#1719](https://github.com/utkarshdalal/GameNative/pull/1719) — **reject** — focused PICS memory optimization is low risk but not relevant enough to carry as a fork-only delta.
+
 - [#1707](https://github.com/utkarshdalal/GameNative/pull/1707) — **reject** — family-library selection is large, conflicting, and unrelated.
 - [#1695](https://github.com/utkarshdalal/GameNative/pull/1695) — **reject** — achievements viewer only.
 - [#1693](https://github.com/utkarshdalal/GameNative/pull/1693) — **reject** — library ViewModel optimization lacks a Y700-relevant bottleneck and current integration evidence.

@@ -1,6 +1,6 @@
 # Project state
 
-Updated: `2026-08-30 17:15 UTC`
+Updated: `2026-08-30 21:13 UTC`
 
 ## Target
 
@@ -14,16 +14,16 @@ Updated: `2026-08-30 17:15 UTC`
 - Status: `functional` for the existing baseline; `0.2.0` passed same-head remote verification and remains pending Y700 hardware observation.
 - Branch: `y700/stable`; resolve the exact candidate with `git rev-parse HEAD` rather than copying a stale SHA into this mutable file.
 - Upstream/fork status: `origin/master` at `c76d3ddc6dec902cb55c4d2d720718f4db03e492` is an ancestor of the branch through merge commit `e99e4105`.
-- PR evaluation: all 60 open upstream PRs were classified in `outputs/upstream-pr-evaluation.md`. Only #1599 was selected now; its focused Epic tablet-overhead improvements were adapted in `a5491ddf` without replacing newer resume/external-storage behavior.
-- Completed: paired Joy-Con logical-controller support; claim/reconnect/player-slot regression fixes; isolated package `app.gamenative.joycontest`; app-private `evshim`; stable-signing workflow; upstream synchronization; complete open-PR inventory; selected Epic optimization; portable project-agent governance and validation contract; code-grounded Markdown documentation under `docs/`.
+- PR evaluation: all open upstream PRs were classified in `outputs/upstream-pr-evaluation.md`. #1599 was adapted in `a5491ddf` without replacing newer Epic resume/external-storage behavior. #1719 was subsequently selected and cherry-picked as `edc88cc5` and `d3c8092b` to reduce Steam PICS refresh memory pressure through a narrow Room projection and consistent batching.
+- Completed: paired Joy-Con logical-controller support; claim/reconnect/player-slot regression fixes; isolated package `app.gamenative.joycontest`; app-private `evshim`; stable-signing workflow; upstream synchronization; complete open-PR inventory; selected Epic and Steam PICS optimizations; portable project-agent governance and validation contract; code-grounded Markdown documentation under `docs/`.
 - CI contract: workflow dispatch now runs the native bridge gate and Legacy+Modern tests before building, signing, verifying, and uploading the isolated Modern APK (`9e826881`).
 - Blockers: local runtime currently has no Java executable and no `JAVA_HOME`/`ANDROID_SDK_ROOT`; local Gradle validation cannot run until the Android toolchain is available. GitHub CI remains the proven build environment.
 - Material limitations: hardware verification remains from the prior Joy-Con baseline, not this upstream/PR candidate. The Y700 thermal improvement claimed by #1599 still needs a real device measurement.
 
 ## Next action
 
-- Action: install the latest same-head artifact on the Lenovo Legion Y700 Gen 3 and run the manual controller/touch/game-launch gate.
-- Depends on: device access and the successful GitHub Actions artifact.
+- Action: run the authorized full delivery workflow for the #1719-integrated head, then install its artifact on the Lenovo Legion Y700 Gen 3 and run the manual controller/touch/game-launch gate.
+- Depends on: fork push, GitHub Actions availability, then device access.
 - Write surface: hardware observations and generated `outputs/ci/` evidence only; no upstream mutation or release publication.
 - Acceptance evidence: manual observations declared in `.agents/validation.md`, tied to the tested build SHA.
 
@@ -34,6 +34,7 @@ Updated: `2026-08-30 17:15 UTC`
 - Previous full tests: GitHub Actions run `33308448387` completed the Legacy + Modern unit-test gate successfully for Joy-Con head `095d6f02`.
 - Candidate evidence rule: use the latest successful `workflow_dispatch` run whose `headSha` exactly equals `git rev-parse HEAD`; older URLs are baseline evidence only.
 - Latest successful delivery evidence before the documentation-only commit: GitHub Actions run `33317043206` passed the native bridge, Legacy+Modern unit tests, isolated Modern APK build, package/signature verification, and upload for head `32789ec4c8f8542f4a127d1c274f52928766b17e`.
+- #1719 pre-integration evidence: its upstream build and automated review checks passed at head `be8a4b1ef842d37972deb9bcc83837b8d883dbe2`; same-head fork CI is still required after integration.
 - Deterministic report: `outputs/quality-report.json` currently reports `QUALITY_INCOMPLETE` solely because the source adapter cannot inspect upstream's prebuilt ARM64 `libredirect-bionic-wx-minimal.so`; the file matches the exact `origin/master` Git blob and has SHA-256 `557aacc4a8b9e0dccb5e6d43aecca7b1723c0095f9bcb24fc5efe0db5390ff41`.
 - Skipped applicable checks: local Gradle tests/build, because Java and Android SDK variables are absent in this runtime. Remote CI is mandatory for the candidate.
 
