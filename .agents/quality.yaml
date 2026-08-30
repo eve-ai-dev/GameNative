@@ -1,0 +1,52 @@
+schema_version: "1.0"
+policy_id: gamenative-y700-quality
+minimum_quality_expected: standard
+change_scope:
+  default: all
+  include_untracked: true
+  detect_file_renames: true
+scope:
+  include:
+    - "app/**"
+    - "ubuntufs/**"
+    - "build.gradle.kts"
+    - "settings.gradle.kts"
+    - "gradle/**"
+    - ".github/workflows/**"
+    - ".agents/**"
+    - "AGENTS.md"
+    - "STATE.md"
+    - "plans/**"
+    - "decisions/**"
+  exclude:
+    - "**/build/**"
+    - "**/.gradle/**"
+    - "**/.cxx/**"
+    - "**/generated/**"
+    - "**/vendor/**"
+    - "**/dist/**"
+    - "**/coverage/**"
+    - "app/src/main/jniLibs/**"
+  languages: [java, kotlin, c, cpp, shell, yaml, json, markdown]
+baseline:
+  strategy: merge_base
+  ref: fork/master
+  unavailable: error
+adapters:
+  - id: core-source
+    type: builtin
+    implementation: core_source_v1
+    languages: [java, kotlin, c, cpp, shell, yaml, json, markdown]
+    required_at: soft
+thresholds:
+  python_ast_v1.function_logical_lines: {warning: 40, strong: 80}
+policy:
+  changed_code_only: true
+  untouched_existing_debt: report
+  soft_new_strong: report
+  standard_new_strong: exception_or_fail
+  top_new_strong: exception_or_fail
+  required_adapter_failure: incomplete
+exceptions: []
+extensions:
+  threshold_note: "The v1 schema requires at least one threshold. Python AST is not an active adapter; Java/Kotlin/C/C++ complexity remains outside deterministic coverage and must be handled through tests, build evidence, and review."
