@@ -1,6 +1,6 @@
 # Project state
 
-Updated: `2026-08-30 21:13 UTC`
+Updated: `2026-08-30 22:13 UTC`
 
 ## Target
 
@@ -22,8 +22,8 @@ Updated: `2026-08-30 21:13 UTC`
 
 ## Next action
 
-- Action: run the authorized full delivery workflow for the #1719-integrated head, then install its artifact on the Lenovo Legion Y700 Gen 3 and run the manual controller/touch/game-launch gate.
-- Depends on: fork push, GitHub Actions availability, then device access.
+- Action: install the latest same-head artifact on the Lenovo Legion Y700 Gen 3 and run the manual controller/touch/game-launch gate.
+- Depends on: device access and the successful GitHub Actions artifact.
 - Write surface: hardware observations and generated `outputs/ci/` evidence only; no upstream mutation or release publication.
 - Acceptance evidence: manual observations declared in `.agents/validation.md`, tied to the tested build SHA.
 
@@ -34,7 +34,7 @@ Updated: `2026-08-30 21:13 UTC`
 - Previous full tests: GitHub Actions run `33308448387` completed the Legacy + Modern unit-test gate successfully for Joy-Con head `095d6f02`.
 - Candidate evidence rule: use the latest successful `workflow_dispatch` run whose `headSha` exactly equals `git rev-parse HEAD`; older URLs are baseline evidence only.
 - Latest successful delivery evidence before the documentation-only commit: GitHub Actions run `33317043206` passed the native bridge, Legacy+Modern unit tests, isolated Modern APK build, package/signature verification, and upload for head `32789ec4c8f8542f4a127d1c274f52928766b17e`.
-- #1719 pre-integration evidence: its upstream build and automated review checks passed at head `be8a4b1ef842d37972deb9bcc83837b8d883dbe2`; same-head fork CI is still required after integration.
+- #1719 evidence: upstream build/review checks passed before integration; the fork delivery workflow subsequently passed the native bridge, Legacy+Modern tests, isolated Modern APK build, package/signature verification, and artifact upload. Resolve the live run and artifact from the current branch head rather than copying a mutable run ID here.
 - Deterministic report: `outputs/quality-report.json` currently reports `QUALITY_INCOMPLETE` solely because the source adapter cannot inspect upstream's prebuilt ARM64 `libredirect-bionic-wx-minimal.so`; the file matches the exact `origin/master` Git blob and has SHA-256 `557aacc4a8b9e0dccb5e6d43aecca7b1723c0095f9bcb24fc5efe0db5390ff41`.
 - Skipped applicable checks: local Gradle tests/build, because Java and Android SDK variables are absent in this runtime. Remote CI is mandatory for the candidate.
 
