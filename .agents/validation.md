@@ -41,7 +41,9 @@ nm -D app/src/main/jniLibs/arm64-v8a/libevshim.so | grep -q Java_com_winlator_wi
 APK=$(find app/build/outputs/apk/modern/release -name '*.apk' -type f -print -quit)
 test -n "$APK"
 APKSIGNER=$(find "$ANDROID_SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -1)
-"$APKSIGNER" verify --verbose --print-certs "$APK"
+SIGNATURE_OUTPUT=$("$APKSIGNER" verify --verbose --print-certs "$APK")
+printf '%s\n' "$SIGNATURE_OUTPUT"
+printf '%s\n' "$SIGNATURE_OUTPUT" | grep -Fq 'certificate SHA-256 digest: eb2a3fac589273c9b1b38a1c6199c5f6fb13d11f382c48ca14ac51bb714310a9'
 AAPT=$(find "$ANDROID_SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -1)
 test -n "$AAPT"
 PACKAGE=$($AAPT dump badging "$APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")
@@ -53,7 +55,7 @@ Expected identity/controls:
 
 - package/application ID: `app.gamenative.joycontest`;
 - version-name suffix: `-joycon-test`;
-- signing verification: success with the stable Y700 certificate, not a newly generated key;
+- signing verification: success with stable Y700 certificate SHA-256 `eb2a3fac589273c9b1b38a1c6199c5f6fb13d11f382c48ca14ac51bb714310a9`, not merely any valid/newly generated key;
 - storage bridge: app-private `evshim`, no hardcoded base-package shared-memory path.
 
 ## Remote CI gates

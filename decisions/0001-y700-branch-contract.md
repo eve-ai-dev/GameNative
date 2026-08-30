@@ -19,7 +19,7 @@ The fork has two different responsibilities: a narrow Joy-Con change suitable fo
 
 ## Consequences
 
-The Y700 branch intentionally carries maintenance delta over upstream. Upstream synchronization can conflict with controller, build, and native-bridge work and must preserve branch invariants explicitly. A green APK build alone is insufficient because the workflow-dispatch lane skips unit tests; same-head test evidence must be obtained separately.
+The Y700 branch intentionally carries maintenance delta over upstream. Upstream synchronization can conflict with controller, build, and native-bridge work and must preserve branch invariants explicitly. The workflow-dispatch lane must run Legacy+Modern unit tests before building, verifying, and uploading the isolated APK so all release evidence belongs to the same head.
 
 ## Recovery
 
