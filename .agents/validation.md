@@ -55,11 +55,11 @@ Expected identity/controls:
 ## Remote CI gates
 
 - PR behavior gate: `.github/workflows/pluvia-pr-check.yml` on a PR to `master` runs Legacy + Modern unit tests.
-- Authorized isolated delivery gate: `gh workflow run pluvia-pr-check.yml --repo eve-ai-dev/GameNative --ref y700/stable`
+- Authorized full delivery gate: `gh workflow run pluvia-pr-check.yml --repo eve-ai-dev/GameNative --ref y700/stable`
 - Inspect a run: `test -n "${RUN_ID:?set RUN_ID}" && gh run view "$RUN_ID" --repo eve-ai-dev/GameNative --json status,conclusion,headSha,jobs,url`
 - Download artifacts only after matching the run `headSha` to the intended branch head: `test -n "${RUN_ID:?set RUN_ID}" && gh run download "$RUN_ID" --repo eve-ai-dev/GameNative --dir "outputs/ci/$RUN_ID"`
 
-Triggering CI or downloading an artifact does not authorize publication. The `workflow_dispatch` lane currently builds/signs/verifies/uploads the isolated APK but deliberately skips the PR unit-test step; therefore a release candidate needs separate fresh Legacy+Modern test evidence for the same integrated code.
+Triggering CI or downloading an artifact does not authorize publication. The `workflow_dispatch` lane runs the native bridge gate and Legacy+Modern tests before building, signing, verifying, and uploading the isolated APK, so one successful run can provide same-head code and artifact evidence.
 
 ## Specialized gates
 

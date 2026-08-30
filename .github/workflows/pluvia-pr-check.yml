@@ -71,8 +71,7 @@ jobs:
           install -m 0755 app/build/evshim/libevshim.so app/src/main/jniLibs/arm64-v8a/libevshim.so
           nm -D app/src/main/jniLibs/arm64-v8a/libevshim.so | grep -q Java_com_winlator_winhandler_WinHandler_initializeSharedMemory
       - name: Run unit tests
-        if: github.event_name == 'pull_request'
-        run: ./gradlew :app:testLegacyDebugUnitTest :app:testModernDebugUnitTest
+        run: ./gradlew :app:testLegacyDebugUnitTest :app:testModernDebugUnitTest --no-daemon --max-workers=2
       - name: Configure stable Joy-Con test signing
         if: github.event_name == 'workflow_dispatch'
         env:
