@@ -97,6 +97,11 @@ public final class JoyConSupport {
                 : -1;
     }
 
+    /** Prefers the logical pair owner when a physical controller claims another player slot. */
+    public static String resolveClaimOwnerIdentifier(String logicalOwnerIdentifier, String directIdentifier) {
+        return logicalOwnerIdentifier != null ? logicalOwnerIdentifier : directIdentifier;
+    }
+
     /**
      * Android reports several Joy-Con buttons as unknown or with a generic layout. Translate the
      * Linux scan codes used by the Joy-Con key layouts into stable Android gamepad key codes.
