@@ -146,6 +146,7 @@ public class WinHandler {
     }
 
     private static native void notifyStateChanged(int playerIndex);
+    private static native boolean initializeSharedMemory(String basePath, int players);
     public static native int waitForRumble(int idx, int lastSeq);
     public static native void rumbleTeardown(int idx);
 
@@ -802,6 +803,9 @@ public class WinHandler {
                 extraGamepadRafs[i].setLength(64);
                 extraGamepadBuffers[i] = extraGamepadRafs[i].getChannel().map(FileChannel.MapMode.READ_WRITE, 0, 64);
                 extraGamepadBuffers[i].order(ByteOrder.LITTLE_ENDIAN);
+            }
+            if (!initializeSharedMemory(context.getFilesDir().getAbsolutePath(), MAX_PLAYERS)) {
+                throw new IOException("Native gamepad bridge failed to map " + gamepadShmDir.getAbsolutePath());
             }
         } catch (IOException e) {
             Log.e("EVSHIM_HOST", "FATAL: Failed to create memory-mapped file(s).", e);
