@@ -14,7 +14,10 @@ The fork has two different responsibilities: a narrow Joy-Con change suitable fo
 - Treat `origin` as read-only upstream and `fork` as the writable fork.
 - Preserve `app.gamenative.joycontest`, `-joycon-test`, app-private `evshim`, stable certificate continuity, and signature verification on `y700/stable`.
 - Integrate upstream and external PR work through auditable commits; prefer targeted patches when broad merges carry unrelated changes.
+- Protect `y700/stable`: require an internal pull request, an up-to-date `Y700 contract` status check, resolved review conversations, and block force pushes/deletion, including for administrators.
+- Keep integration and delivery separate: PR checks use no stable-signing secrets; signed delivery runs only from the merged `y700/stable` SHA.
 - Require separate Legacy+Modern test and isolated APK/signature evidence for release candidates.
+- Treat every signed APK as a candidate until the exact-SHA Lenovo Y700 hardware checklist passes.
 - Require explicit approval before public release or any action on external/upstream PRs.
 
 ## Consequences

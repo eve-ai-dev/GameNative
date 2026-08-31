@@ -20,6 +20,8 @@
 - Keep executable project commands only in `.agents/validation.md`.
 - Treat `origin` (`utkarshdalal/GameNative`) as upstream/read-only and `fork` (`eve-ai-dev/GameNative`) as the writable fork. Never push to `origin`.
 - `y700/stable` is the maintained Y700 integration and delivery branch. `fix/paired-joycon-input` is the narrow upstream-review branch for Joy-Con behavior.
+- Changes to `y700/stable` must arrive through an internal pull request and pass the required `Y700 contract` status check; direct pushes, force pushes, and branch deletion are prohibited.
+- Signed delivery must run from the merged `y700/stable` SHA. Its APK is a candidate until the manual Y700 controller/touch/reconnect journey passes for that same SHA.
 - Preserve paired Joy-Con ownership, reconnect/player-slot persistence, normal touch input, and controller regression coverage.
 - Preserve the isolated release identity (`app.gamenative.joycontest`), version suffix, isolated-storage `evshim` path, stable signing contract, and signature verification unless an accepted decision explicitly replaces them.
 - Never commit keystores, signing properties, tokens, API keys, or generated APKs.

@@ -1,0 +1,83 @@
+name: Y700 protected integration
+
+on:
+  pull_request:
+    branches: [ "y700/stable" ]
+  merge_group:
+    branches: [ "y700/stable" ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: y700-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Y700 contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+      - name: Verify static Y700 invariants
+        run: |
+          python3 scripts/verify_y700_contract.py .
+          python3 scripts/test_verify_y700_contract.py
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+      - name: Inject dummy credentials
+        run: |
+          printf 'POSTHOG_API_KEY=dummy\n' > local.properties
+          printf 'POSTHOG_HOST=https://us.i.posthog.com\n' >> local.properties
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Checkout pinned SDL headers
+        uses: actions/checkout@v4
+        with:
+          repository: libsdl-org/SDL
+          ref: release-2.32.10
+          path: app/build/SDL
+          sparse-checkout: include
+      - name: Build isolated-storage evshim bridge
+        run: |
+          set -euo pipefail
+          NDK_VERSION=27.3.13750724
+          NDK_DIR="$ANDROID_SDK_ROOT/ndk/$NDK_VERSION"
+          if [ ! -d "$NDK_DIR" ]; then
+            "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION"
+          fi
+          cmake -S app/src/main/cpp/evshim -B app/build/evshim \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK_DIR/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-29 \
+            -DSDL2_INCLUDE_DIR="$GITHUB_WORKSPACE/app/build/SDL/include" \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build app/build/evshim --parallel 2
+          install -m 0755 app/build/evshim/libevshim.so app/src/main/jniLibs/arm64-v8a/libevshim.so
+          nm -D app/src/main/jniLibs/arm64-v8a/libevshim.so | grep -q Java_com_winlator_winhandler_WinHandler_initializeSharedMemory
+      - name: Run Legacy and Modern unit tests
+        run: ./gradlew :app:testLegacyDebugUnitTest :app:testModernDebugUnitTest --no-daemon --max-workers=2
+      - name: Build isolated unsigned candidate
+        env:
+          JOYCON_VERSION_CODE: ${{ github.run_number }}
+        run: ./gradlew :app:assembleModernRelease -PjoyConVersionCode=$((200000 + JOYCON_VERSION_CODE)) --no-daemon --max-workers=2
+      - name: Inspect isolated candidate
+        run: |
+          set -euo pipefail
+          APK=$(find app/build/outputs/apk/modern/release -name '*.apk' -type f -print -quit)
+          test -n "$APK"
+          AAPT=$(find "$ANDROID_SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -1)
+          test -n "$AAPT"
+          PACKAGE=$($AAPT dump badging "$APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")
+          test "$PACKAGE" = "app.gamenative.joycontest"
+          unzip -p "$APK" lib/arm64-v8a/libevshim.so > "$RUNNER_TEMP/libevshim.so"
+          nm -D "$RUNNER_TEMP/libevshim.so" | grep -q Java_com_winlator_winhandler_WinHandler_initializeSharedMemory
+          sha256sum "$APK"

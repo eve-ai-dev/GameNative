@@ -18,6 +18,11 @@ jobs:
     steps:
       - name: Checking out GameNative
         uses: actions/checkout@v4
+      - name: Require stable branch for signed delivery
+        if: github.event_name == 'workflow_dispatch'
+        run: test "$GITHUB_REF_NAME" = "y700/stable"
+      - name: Verify Y700 fork contract
+        run: python3 scripts/verify_y700_contract.py .
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
