@@ -110,6 +110,30 @@ class JoyConSupportTest {
         assertEquals("ordinary-controller", JoyConSupport.resolveClaimOwnerIdentifier(null, "ordinary-controller"))
     }
 
+    @Test
+    fun `moving direct pair owner preserves both remembered members`() {
+        val pairSlots = linkedMapOf("left" to 1, "right" to 1)
+
+        assertTrue(JoyConSupport.shouldMoveRememberedPair(1, 0, 1))
+        JoyConSupport.moveRememberedPairSlot(pairSlots, 1, 0)
+
+        assertEquals(linkedMapOf("left" to 0, "right" to 0), pairSlots)
+        assertFalse(JoyConSupport.shouldMoveRememberedPair(1, 0, -1))
+    }
+
+    @Test
+    fun `remembered lone non-owner becomes direct slot owner`() {
+        assertTrue(JoyConSupport.shouldPromoteRememberedLoneHalf(true, -1, 2, 1, false))
+        assertFalse(JoyConSupport.shouldPromoteRememberedLoneHalf(true, -1, 2, 2, false))
+        assertFalse(JoyConSupport.shouldPromoteRememberedLoneHalf(true, -1, 2, 1, true))
+    }
+
+    @Test
+    fun `cached source state requires matching descriptor`() {
+        assertTrue(JoyConSupport.canReuseSourceController("descriptor-a", "descriptor-a"))
+        assertFalse(JoyConSupport.canReuseSourceController("descriptor-a", "descriptor-b"))
+        assertFalse(JoyConSupport.canReuseSourceController(null, "descriptor-a"))
+    }
 
     @Test
     fun `maps left Joy-Con Linux scan codes to Android controls`() {

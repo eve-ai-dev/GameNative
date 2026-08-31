@@ -4,6 +4,7 @@ import android.view.InputDevice;
 import android.view.KeyEvent;
 
 import java.util.Collection;
+import java.util.Map;
 
 /** Compatibility helpers for Nintendo Switch Joy-Con halves exposed as separate Android devices. */
 public final class JoyConSupport {
@@ -100,6 +101,47 @@ public final class JoyConSupport {
     /** Prefers the logical pair owner when a physical controller claims another player slot. */
     public static String resolveClaimOwnerIdentifier(String logicalOwnerIdentifier, String directIdentifier) {
         return logicalOwnerIdentifier != null ? logicalOwnerIdentifier : directIdentifier;
+    }
+
+    /** A directly assigned pair owner carries both remembered members when it changes slots. */
+    public static boolean shouldMoveRememberedPair(
+            int previousPairSlot,
+            int targetSlot,
+            int previousDirectSlot
+    ) {
+        return previousPairSlot >= 0
+                && previousPairSlot != targetSlot
+                && previousDirectSlot == previousPairSlot;
+    }
+
+    /** Moves all remembered members of a logical pair to the owner's new slot. */
+    public static void moveRememberedPairSlot(
+            Map<String, Integer> pairSlots,
+            int previousSlot,
+            int targetSlot
+    ) {
+        if (pairSlots == null || previousSlot == targetSlot) return;
+        pairSlots.replaceAll((identifier, slot) -> slot == previousSlot ? targetSlot : slot);
+    }
+
+    /** A lone remembered non-owner must become the direct owner when the saved owner is absent. */
+    public static boolean shouldPromoteRememberedLoneHalf(
+            boolean isJoyCon,
+            int directSlot,
+            int persistedPairSlot,
+            int connectedJoyConCount,
+            boolean persistedOwnerConnected
+    ) {
+        return isJoyCon
+                && directSlot < 0
+                && persistedPairSlot >= 0
+                && connectedJoyConCount == 1
+                && !persistedOwnerConnected;
+    }
+
+    /** Returns true when a controller with this descriptor may safely reuse cached source state. */
+    public static boolean canReuseSourceController(String cachedDescriptor, String currentDescriptor) {
+        return cachedDescriptor != null && cachedDescriptor.equals(currentDescriptor);
     }
 
     /**

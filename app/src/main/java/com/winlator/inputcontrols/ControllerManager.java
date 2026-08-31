@@ -312,6 +312,12 @@ public class ControllerManager {
     }
 
     private void assignDeviceIdentifierToSlot(int slotIndex, String newDeviceIdentifier) {
+        int previousDirectSlot = getSlotForIdentifier(newDeviceIdentifier);
+        Integer previousPairSlot = pairedJoyConSlotByIdentifier.get(newDeviceIdentifier);
+        boolean movesRememberedPair = previousPairSlot != null
+                && JoyConSupport.shouldMoveRememberedPair(
+                        previousPairSlot, slotIndex, previousDirectSlot);
+
         // First, remove the new device from any slot it might already be in.
         for (int i = 0; i < MAX_SLOTS; i++) {
             if (newDeviceIdentifier.equals(slotAssignments.get(i))) {
@@ -319,10 +325,15 @@ public class ControllerManager {
             }
         }
 
-        // Moving a remembered Joy-Con member invalidates the pair's previous logical slot.
-        Integer previousPairSlot = pairedJoyConSlotByIdentifier.get(newDeviceIdentifier);
+        // Move pair memory with its direct owner; an isolated remembered member invalidates it.
         if (previousPairSlot != null && previousPairSlot != slotIndex) {
-            pairedJoyConSlotByIdentifier.entrySet().removeIf(entry -> entry.getValue().equals(previousPairSlot));
+            if (movesRememberedPair) {
+                JoyConSupport.moveRememberedPairSlot(
+                        pairedJoyConSlotByIdentifier, previousPairSlot, slotIndex);
+            } else {
+                pairedJoyConSlotByIdentifier.entrySet().removeIf(
+                        entry -> entry.getValue().equals(previousPairSlot));
+            }
         }
 
         // A different physical controller taking this slot invalidates stale Joy-Con pair memory.
@@ -385,6 +396,26 @@ public class ControllerManager {
                 getSlotForIdentifier(getDeviceIdentifier(complementaryJoyCon)));
     }
 
+    /** Returns whether this device bypasses the Player 1 profile path and goes to WinHandler. */
+    public boolean shouldRouteDirectlyToWinHandler(int deviceId) {
+        InputDevice device = inputManager.getInputDevice(deviceId);
+        String identifier = getDeviceIdentifierForDeviceId(deviceId);
+        if (device == null || identifier == null) return false;
+        int directSlot = getSlotForIdentifier(identifier);
+        InputDevice complementaryJoyCon = findComplementaryJoyCon(device);
+        int complementaryDirectSlot = complementaryJoyCon == null
+                ? -1
+                : getSlotForIdentifier(getDeviceIdentifier(complementaryJoyCon));
+        int logicalSlot = JoyConSupport.resolveLogicalSlot(
+                JoyConSupport.isJoyCon(device),
+                directSlot,
+                complementaryDirectSlot,
+                pairedJoyConSlotByIdentifier.getOrDefault(identifier, -1),
+                getConnectedJoyConCount());
+        return logicalSlot > 0 || (complementaryJoyCon != null
+                && JoyConSupport.shouldFusePair(directSlot, complementaryDirectSlot));
+    }
+
     private InputDevice findComplementaryJoyCon(InputDevice device) {
         if (!JoyConSupport.isJoyCon(device)) return null;
         List<int[]> joyConIds = new ArrayList<>();
@@ -425,6 +456,33 @@ public class ControllerManager {
         lastKnownSlotByIdentifier.put(identifier, slot);
         lastKnownSlotByIdentifier.put(complementIdentifier, slot);
         return changed;
+    }
+
+    private boolean promoteRememberedLoneHalfIfNeeded(InputDevice device, int logicalSlot) {
+        String identifier = getDeviceIdentifier(device);
+        int directSlot = getSlotForIdentifier(identifier);
+        String persistedOwner = slotAssignments.get(logicalSlot);
+        boolean persistedOwnerConnected = false;
+        if (persistedOwner != null) {
+            for (InputDevice candidate : detectedDevices) {
+                if (persistedOwner.equals(getDeviceIdentifier(candidate))) {
+                    persistedOwnerConnected = true;
+                    break;
+                }
+            }
+        }
+        if (!JoyConSupport.shouldPromoteRememberedLoneHalf(
+                JoyConSupport.isJoyCon(device),
+                directSlot,
+                pairedJoyConSlotByIdentifier.getOrDefault(identifier, -1),
+                getConnectedJoyConCount(),
+                persistedOwnerConnected)) {
+            return false;
+        }
+        assignDeviceIdentifierToSlot(logicalSlot, identifier);
+        Log.i(TAG, "Promoted remembered lone Joy-Con deviceId=" + device.getId()
+                + " to Player " + (logicalSlot + 1));
+        return true;
     }
 
     /**
@@ -561,8 +619,10 @@ public class ControllerManager {
         }
         int existing = getSlotForDevice(deviceId);
         if (existing >= 0) {
-            if (rememberJoyConPairSlot(device, existing)) {
+            if (promoteRememberedLoneHalfIfNeeded(device, existing)
+                    | rememberJoyConPairSlot(device, existing)) {
                 saveAssignments();
+                notifySlotsChanged();
             }
             return;
         }
@@ -599,6 +659,7 @@ public class ControllerManager {
                 continue;
             }
             if (logicalSlot >= 0) {
+                changed |= promoteRememberedLoneHalfIfNeeded(device, logicalSlot);
                 changed |= rememberJoyConPairSlot(device, logicalSlot);
                 continue;
             }
@@ -726,6 +787,8 @@ public class ControllerManager {
         String occupantIdentifier = getDeviceIdentifier(occupant);
         if (occupantIdentifier == null || sessionActiveIdentifiers.contains(occupantIdentifier)) return false;
         String deviceIdentifier = getSlotOwnerIdentifier(deviceId);
+        deviceIdentifier = JoyConSupport.resolveClaimOwnerIdentifier(
+                deviceIdentifier, getDeviceIdentifierForDeviceId(deviceId));
         if (deviceIdentifier == null) return false;
         assignDeviceIdentifierToSlot(0, deviceIdentifier);
         if (slot > 0) {
