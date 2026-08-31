@@ -1599,9 +1599,9 @@ fun XServerScreen(
                 ) {
                     winHandler.refreshControllerMappingsForHotplug()
                 }
-                val assignedSlot = ControllerManager.getInstance().getSlotForDevice(it.event.device.id)
-                val pairedJoyCon = ControllerManager.getInstance().isPairedJoyCon(it.event.device.id)
-                if (assignedSlot > 0 || pairedJoyCon) {
+                val routeDirectly = ControllerManager.getInstance()
+                    .shouldRouteDirectlyToWinHandler(it.event.device.id)
+                if (routeDirectly) {
                     handled = winHandler.onKeyEvent(it.event)
                 } else {
                     winHandler.setCurrentController(it.event.device.id)
@@ -1652,9 +1652,9 @@ fun XServerScreen(
             if (isGamepad && it.event != null) {
                 val winHandler = xServerView!!.getxServer().winHandler
                 ControllerManager.getInstance().noteGamepadActivity(it.event)
-                val assignedSlot = ControllerManager.getInstance().getSlotForDevice(it.event.device.id)
-                val pairedJoyCon = ControllerManager.getInstance().isPairedJoyCon(it.event.device.id)
-                if (assignedSlot > 0 || pairedJoyCon) {
+                val routeDirectly = ControllerManager.getInstance()
+                    .shouldRouteDirectlyToWinHandler(it.event.device.id)
+                if (routeDirectly) {
                     handled = winHandler.onGenericMotionEvent(it.event)
                 } else {
                     winHandler.setCurrentController(it.event.device.id)

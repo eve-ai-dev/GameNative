@@ -60,6 +60,7 @@ public class WinHandler {
     private final MappedByteBuffer[] extraGamepadBuffers = new MappedByteBuffer[MAX_PLAYERS - 1];
     private final ExternalController[] extraControllers = new ExternalController[MAX_PLAYERS - 1];
     private final SparseArray<ExternalController> sourceControllers = new SparseArray<>();
+    private final int[][] sourceDeviceIdsBySlot = new int[MAX_PLAYERS][];
     private MappedByteBuffer gamepadBuffer;
     private static final short SERVER_PORT = 7947;
     private static final short CLIENT_PORT = 7946;
@@ -145,7 +146,6 @@ public class WinHandler {
     }
 
     private static native void notifyStateChanged(int playerIndex);
-    private static native boolean initializeSharedMemory(String basePath, int players);
     public static native int waitForRumble(int idx, int lastSeq);
     public static native void rumbleTeardown(int idx);
 
@@ -220,9 +220,14 @@ public class WinHandler {
         }
 
         for (int slot = 0; slot < MAX_PLAYERS; slot++) {
-            for (InputDevice device : controllerManager.getDevicesForSlot(slot)) {
+            List<InputDevice> slotDevices = controllerManager.getDevicesForSlot(slot);
+            sourceDeviceIdsBySlot[slot] = new int[slotDevices.size()];
+            for (int index = 0; index < slotDevices.size(); index++) {
+                InputDevice device = slotDevices.get(index);
+                sourceDeviceIdsBySlot[slot][index] = device.getId();
                 ExternalController sourceController = previousSourceControllers.get(device.getId());
-                if (sourceController == null) {
+                if (sourceController == null || !JoyConSupport.canReuseSourceController(
+                        sourceController.getId(), device.getDescriptor())) {
                     sourceController = createSourceController(device.getId());
                 } else {
                     configureSourceController(sourceController, device);
@@ -245,18 +250,8 @@ public class WinHandler {
     }
 
     public void reassertPrimaryController() {
-        controllerManager.scanForDevices();
-        InputDevice p1Device = controllerManager.getAssignedDeviceForSlot(0);
-        if (p1Device == null) return;
-        ExternalController c = ExternalController.getController(p1Device.getId());
-        if (c != null) {
-            c.setContext(activity);
-            currentController = c;
-            if (sourceControllers.get(p1Device.getId()) == null) {
-                ExternalController source = createSourceController(p1Device.getId());
-                if (source != null) sourceControllers.put(p1Device.getId(), source);
-            }
-        }
+        refreshControllerMappings(false);
+        sendGamepadState();
     }
 
     private ExternalController getControllerFromSlot(int slot){
@@ -284,15 +279,17 @@ public class WinHandler {
 
     private void configureSourceController(ExternalController controller, InputDevice device) {
         controller.setContext(activity);
-        if (JoyConSupport.isJoyCon(device)) {
-            controller.setTriggerType(ExternalController.TRIGGER_IS_BUTTON);
-        }
+        controller.setTriggerType(JoyConSupport.isJoyCon(device)
+                ? ExternalController.TRIGGER_IS_BUTTON
+                : ExternalController.TRIGGER_IS_AXIS);
     }
 
     private GamepadState getCombinedStateForSlot(int slot) {
         List<GamepadState> states = new ArrayList<>();
-        for (InputDevice device : controllerManager.getDevicesForSlot(slot)) {
-            ExternalController sourceController = sourceControllers.get(device.getId());
+        int[] deviceIds = sourceDeviceIdsBySlot[slot];
+        if (deviceIds == null) return GamepadState.combine(states);
+        for (int deviceId : deviceIds) {
+            ExternalController sourceController = sourceControllers.get(deviceId);
             if (sourceController != null) states.add(sourceController.state);
         }
         return GamepadState.combine(states);
@@ -805,9 +802,6 @@ public class WinHandler {
                 extraGamepadRafs[i].setLength(64);
                 extraGamepadBuffers[i] = extraGamepadRafs[i].getChannel().map(FileChannel.MapMode.READ_WRITE, 0, 64);
                 extraGamepadBuffers[i].order(ByteOrder.LITTLE_ENDIAN);
-            }
-            if (!initializeSharedMemory(context.getFilesDir().getAbsolutePath(), MAX_PLAYERS)) {
-                throw new IOException("Native gamepad bridge failed to map " + gamepadShmDir.getAbsolutePath());
             }
         } catch (IOException e) {
             Log.e("EVSHIM_HOST", "FATAL: Failed to create memory-mapped file(s).", e);
