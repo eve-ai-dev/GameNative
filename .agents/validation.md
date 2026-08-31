@@ -12,6 +12,8 @@ This file is the sole authority for executable project commands. Run from the re
 
 ## Core commands
 
+- Y700 fork contract: `python3 scripts/verify_y700_contract.py .`
+- Y700 contract regressions: `python3 scripts/test_verify_y700_contract.py`
 - Setup/toolchain smoke: `./gradlew --version`
 - Targeted Joy-Con test: `./gradlew :app:testLegacyDebugUnitTest :app:testModernDebugUnitTest --tests 'com.winlator.inputcontrols.JoyConSupportTest' --no-daemon --max-workers=2`
 - Full test: `./gradlew :app:testLegacyDebugUnitTest :app:testModernDebugUnitTest --no-daemon --max-workers=2`
@@ -61,11 +63,13 @@ Expected identity/controls:
 ## Remote CI gates
 
 - PR behavior gate: `.github/workflows/pluvia-pr-check.yml` on a PR to `master` runs Legacy + Modern unit tests.
+- Protected Y700 integration gate: `.github/workflows/y700-protected-integration.yml` runs the Y700 contract, native bridge build, Legacy+Modern tests, isolated unsigned candidate build, and package/native-symbol inspection for every PR to `y700/stable`.
 - Authorized full delivery gate: `gh workflow run pluvia-pr-check.yml --repo eve-ai-dev/GameNative --ref y700/stable`
 - Inspect a run: `test -n "${RUN_ID:?set RUN_ID}" && gh run view "$RUN_ID" --repo eve-ai-dev/GameNative --json status,conclusion,headSha,jobs,url`
 - Download artifacts only after matching the run `headSha` to the intended branch head: `test -n "${RUN_ID:?set RUN_ID}" && gh run download "$RUN_ID" --repo eve-ai-dev/GameNative --dir "outputs/ci/$RUN_ID"`
 
 Triggering CI or downloading an artifact does not authorize publication. The `workflow_dispatch` lane runs the native bridge gate and Legacy+Modern tests before building, signing, verifying, and uploading the isolated APK, so one successful run can provide same-head code and artifact evidence.
+Signed delivery dispatches are accepted only from `y700/stable`; feature refs must merge through the protected internal-PR lane first. Delivery artifacts remain candidates until the manual Lenovo Y700 hardware journey passes for that exact SHA.
 
 ## Specialized gates
 
