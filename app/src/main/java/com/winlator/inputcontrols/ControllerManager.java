@@ -52,11 +52,14 @@ public class ControllerManager {
     // This list will hold all physical game controllers detected by Android.
     private final List<InputDevice> detectedDevices = new ArrayList<>();
     private final SparseArray<String> knownDeviceIdentifiers = new SparseArray<>();
+    private final Map<String, Integer> knownVendorIdsByIdentifier = new HashMap<>();
+    private final Map<String, Integer> knownProductIdsByIdentifier = new HashMap<>();
 
     // This maps a player slot (0-3) to the unique identifier of the physical device.
     // e.g., key=0, value="vendor_123_product_456"
     private final SparseArray<String> slotAssignments = new SparseArray<>();
     private final Map<String, Integer> lastKnownSlotByIdentifier = new HashMap<>();
+    private final Map<String, Integer> pairedJoyConSlotByIdentifier = new HashMap<>();
 
     // This tracks which of the 4 player slots are enabled by the user.
     private final boolean[] enabledSlots = new boolean[MAX_SLOTS];
@@ -76,6 +79,7 @@ public class ControllerManager {
 
     public static final String PREF_PLAYER_SLOT_PREFIX = "controller_slot_";
     public static final String PREF_ENABLED_SLOTS_PREFIX = "enabled_slot_";
+    private static final String PREF_JOY_CON_PAIR_MEMBERS_PREFIX = "joy_con_pair_members_";
 
 
     /**
@@ -110,7 +114,11 @@ public class ControllerManager {
                 detectedDevices.add(device);
                 String ident = getDeviceIdentifier(device);
                 knownDeviceIdentifiers.put(deviceId, ident);
-                if (ident != null) present.add(ident);
+                if (ident != null) {
+                    present.add(ident);
+                    knownVendorIdsByIdentifier.put(ident, device.getVendorId());
+                    knownProductIdsByIdentifier.put(ident, device.getProductId());
+                }
             }
         }
         long now = SystemClock.elapsedRealtime();
@@ -138,6 +146,7 @@ public class ControllerManager {
     private void loadAssignments() {
         slotAssignments.clear();
         lastKnownSlotByIdentifier.clear();
+        pairedJoyConSlotByIdentifier.clear();
         for (int i = 0; i < MAX_SLOTS; i++) {
             // Load which device is assigned to this slot
             String prefKey = PREF_PLAYER_SLOT_PREFIX + i;
@@ -145,6 +154,11 @@ public class ControllerManager {
             if (deviceIdentifier != null) {
                 slotAssignments.put(i, deviceIdentifier);
                 lastKnownSlotByIdentifier.put(deviceIdentifier, i);
+            }
+            for (String pairMember : preferences.getStringSet(
+                    PREF_JOY_CON_PAIR_MEMBERS_PREFIX + i, java.util.Collections.emptySet())) {
+                pairedJoyConSlotByIdentifier.put(pairMember, i);
+                lastKnownSlotByIdentifier.put(pairMember, i);
             }
 
             // Load whether this slot is enabled. Default P1=true, P2-4=false.
@@ -166,6 +180,17 @@ public class ControllerManager {
                 editor.putString(prefKey, deviceIdentifier);
             } else {
                 editor.remove(prefKey);
+            }
+
+            Set<String> pairMembers = new HashSet<>();
+            for (Map.Entry<String, Integer> entry : pairedJoyConSlotByIdentifier.entrySet()) {
+                if (entry.getValue() == i) pairMembers.add(entry.getKey());
+            }
+            String pairMembersKey = PREF_JOY_CON_PAIR_MEMBERS_PREFIX + i;
+            if (pairMembers.isEmpty()) {
+                editor.remove(pairMembersKey);
+            } else {
+                editor.putStringSet(pairMembersKey, pairMembers);
             }
 
             // Save the enabled state
@@ -212,7 +237,8 @@ public class ControllerManager {
             }
         }
 
-        return (isGamepad && hasGamepadKeys) ||
+        return JoyConSupport.isJoyCon(device) ||
+                (isGamepad && hasGamepadKeys) ||
                 (isJoystick && hasAxes);
     }
 
@@ -293,6 +319,17 @@ public class ControllerManager {
             }
         }
 
+        // Moving a remembered Joy-Con member invalidates the pair's previous logical slot.
+        Integer previousPairSlot = pairedJoyConSlotByIdentifier.get(newDeviceIdentifier);
+        if (previousPairSlot != null && previousPairSlot != slotIndex) {
+            pairedJoyConSlotByIdentifier.entrySet().removeIf(entry -> entry.getValue().equals(previousPairSlot));
+        }
+
+        // A different physical controller taking this slot invalidates stale Joy-Con pair memory.
+        if (!Integer.valueOf(slotIndex).equals(pairedJoyConSlotByIdentifier.get(newDeviceIdentifier))) {
+            pairedJoyConSlotByIdentifier.entrySet().removeIf(entry -> entry.getValue() == slotIndex);
+        }
+
         // Assign the new device to the target slot.
         slotAssignments.put(slotIndex, newDeviceIdentifier);
         lastKnownSlotByIdentifier.put(newDeviceIdentifier, slotIndex);
@@ -310,6 +347,7 @@ public class ControllerManager {
             lastKnownSlotByIdentifier.put(deviceIdentifier, slotIndex);
         }
         slotAssignments.remove(slotIndex);
+        pairedJoyConSlotByIdentifier.entrySet().removeIf(entry -> entry.getValue() == slotIndex);
         markSlotRecentlyFreed(slotIndex);
         saveAssignments();
         notifySlotsChanged();
@@ -321,10 +359,119 @@ public class ControllerManager {
      * @return The player slot index (0-3), or -1 if the device is not assigned.
      */
     public int getSlotForDevice(int deviceId) {
+        InputDevice device = inputManager.getInputDevice(deviceId);
         String deviceIdentifier = getDeviceIdentifierForDeviceId(deviceId);
         if (deviceIdentifier == null) return -1;
 
-        return getSlotForIdentifier(deviceIdentifier);
+        int directSlot = getSlotForIdentifier(deviceIdentifier);
+        InputDevice complementaryJoyCon = findComplementaryJoyCon(device);
+        int complementaryDirectSlot = complementaryJoyCon == null
+                ? -1
+                : getSlotForIdentifier(getDeviceIdentifier(complementaryJoyCon));
+        return JoyConSupport.resolveLogicalSlot(
+                JoyConSupport.isJoyCon(device),
+                directSlot,
+                complementaryDirectSlot,
+                pairedJoyConSlotByIdentifier.getOrDefault(deviceIdentifier, -1),
+                getConnectedJoyConCount());
+    }
+
+    public boolean isPairedJoyCon(int deviceId) {
+        InputDevice device = inputManager.getInputDevice(deviceId);
+        InputDevice complementaryJoyCon = findComplementaryJoyCon(device);
+        if (complementaryJoyCon == null) return false;
+        return JoyConSupport.shouldFusePair(
+                getSlotForIdentifier(getDeviceIdentifier(device)),
+                getSlotForIdentifier(getDeviceIdentifier(complementaryJoyCon)));
+    }
+
+    private InputDevice findComplementaryJoyCon(InputDevice device) {
+        if (!JoyConSupport.isJoyCon(device)) return null;
+        List<int[]> joyConIds = new ArrayList<>();
+        for (InputDevice candidate : detectedDevices) {
+            if (JoyConSupport.isJoyCon(candidate)) {
+                joyConIds.add(new int[]{candidate.getVendorId(), candidate.getProductId()});
+            }
+        }
+        if (!JoyConSupport.isUnambiguousPair(joyConIds)) return null;
+
+        InputDevice match = null;
+        for (InputDevice candidate : detectedDevices) {
+            if (candidate.getId() != device.getId() && JoyConSupport.areComplementary(device, candidate)) {
+                match = candidate;
+            }
+        }
+        return match;
+    }
+
+    private int getConnectedJoyConCount() {
+        int count = 0;
+        for (InputDevice device : detectedDevices) {
+            if (JoyConSupport.isJoyCon(device)) count++;
+        }
+        return count;
+    }
+
+    private boolean rememberJoyConPairSlot(InputDevice device, int slot) {
+        InputDevice complement = findComplementaryJoyCon(device);
+        if (slot < 0 || complement == null) return false;
+        String identifier = getDeviceIdentifier(device);
+        String complementIdentifier = getDeviceIdentifier(complement);
+        if (identifier == null || complementIdentifier == null) return false;
+        boolean changed = !Integer.valueOf(slot).equals(pairedJoyConSlotByIdentifier.get(identifier))
+                || !Integer.valueOf(slot).equals(pairedJoyConSlotByIdentifier.get(complementIdentifier));
+        pairedJoyConSlotByIdentifier.put(identifier, slot);
+        pairedJoyConSlotByIdentifier.put(complementIdentifier, slot);
+        lastKnownSlotByIdentifier.put(identifier, slot);
+        lastKnownSlotByIdentifier.put(complementIdentifier, slot);
+        return changed;
+    }
+
+    /**
+     * Older versions assigned each half of a single Joy-Con set to a different player. Collapse
+     * that persisted layout to the lower player slot so existing users receive pairing without
+     * having to clear controller settings. Multiple sets remain untouched because they are
+     * ambiguous without an explicit pairing relationship from Android.
+     */
+    private boolean collapseLegacyJoyConPairAssignments() {
+        List<InputDevice> joyCons = new ArrayList<>();
+        List<int[]> joyConIds = new ArrayList<>();
+        for (InputDevice device : detectedDevices) {
+            if (JoyConSupport.isJoyCon(device)) {
+                joyCons.add(device);
+                joyConIds.add(new int[]{device.getVendorId(), device.getProductId()});
+            }
+        }
+        if (!JoyConSupport.isUnambiguousPair(joyConIds)) return false;
+
+        InputDevice first = joyCons.get(0);
+        InputDevice second = joyCons.get(1);
+        String firstIdentifier = getDeviceIdentifier(first);
+        String secondIdentifier = getDeviceIdentifier(second);
+        int firstSlot = getSlotForIdentifier(firstIdentifier);
+        int secondSlot = getSlotForIdentifier(secondIdentifier);
+        int ownerSlot = JoyConSupport.getLegacyPairOwnerSlot(firstSlot, secondSlot);
+        if (ownerSlot < 0) return false;
+        int releasedSlot = Math.max(firstSlot, secondSlot);
+        String ownerIdentifier = firstSlot == ownerSlot ? firstIdentifier : secondIdentifier;
+        slotAssignments.put(ownerSlot, ownerIdentifier);
+        slotAssignments.remove(releasedSlot);
+        lastKnownSlotByIdentifier.put(firstIdentifier, ownerSlot);
+        lastKnownSlotByIdentifier.put(secondIdentifier, ownerSlot);
+        pairedJoyConSlotByIdentifier.put(firstIdentifier, ownerSlot);
+        pairedJoyConSlotByIdentifier.put(secondIdentifier, ownerSlot);
+        markSlotRecentlyFreed(releasedSlot);
+        Log.i(TAG, "Collapsed legacy split Joy-Con assignments into Player " + (ownerSlot + 1));
+        return true;
+    }
+
+    /** Returns every connected physical device contributing to a player slot. */
+    public List<InputDevice> getDevicesForSlot(int slotIndex) {
+        List<InputDevice> devices = new ArrayList<>();
+        for (InputDevice device : detectedDevices) {
+            if (getSlotForDevice(device.getId()) == slotIndex) devices.add(device);
+        }
+        return devices;
     }
 
     private int getSlotForIdentifier(String deviceIdentifier) {
@@ -340,6 +487,12 @@ public class ControllerManager {
         }
 
         return -1; // Not found
+    }
+
+    /** Returns the directly assigned identifier that owns this device's logical slot. */
+    private String getSlotOwnerIdentifier(int deviceId) {
+        int slot = getSlotForDevice(deviceId);
+        return slot >= 0 ? slotAssignments.get(slot) : null;
     }
 
     private String getDeviceIdentifierForDeviceId(int deviceId) {
@@ -402,8 +555,15 @@ public class ControllerManager {
 
         knownDeviceIdentifiers.put(deviceId, deviceIdentifier);
         scanForDevices();
+        if (collapseLegacyJoyConPairAssignments()) {
+            saveAssignments();
+            notifySlotsChanged();
+        }
         int existing = getSlotForDevice(deviceId);
         if (existing >= 0) {
+            if (rememberJoyConPairSlot(device, existing)) {
+                saveAssignments();
+            }
             return;
         }
 
@@ -431,10 +591,15 @@ public class ControllerManager {
      */
     public void autoAssignConnectedDevices() {
         scanForDevices();
-        boolean changed = false;
+        boolean changed = collapseLegacyJoyConPairAssignments();
         for (InputDevice device : detectedDevices) {
             String deviceIdentifier = getDeviceIdentifier(device);
-            if (deviceIdentifier == null || getSlotForDevice(device.getId()) >= 0) {
+            int logicalSlot = getSlotForDevice(device.getId());
+            if (deviceIdentifier == null) {
+                continue;
+            }
+            if (logicalSlot >= 0) {
+                changed |= rememberJoyConPairSlot(device, logicalSlot);
                 continue;
             }
 
@@ -466,17 +631,54 @@ public class ControllerManager {
     public void onDeviceDisconnected(int deviceId) {
         String deviceIdentifier = getDeviceIdentifierForDeviceId(deviceId);
         int slot = getSlotForIdentifier(deviceIdentifier);
+        Integer disconnectedVendorId = knownVendorIdsByIdentifier.get(deviceIdentifier);
+        Integer disconnectedProductId = knownProductIdsByIdentifier.get(deviceIdentifier);
+        String replacementIdentifier = null;
+        int complementaryCount = 0;
+        if (slot >= 0 && disconnectedVendorId != null && disconnectedProductId != null) {
+            for (InputDevice device : detectedDevices) {
+                if (device.getId() != deviceId && JoyConSupport.areComplementary(
+                        disconnectedVendorId,
+                        disconnectedProductId,
+                        device.getVendorId(),
+                        device.getProductId())) {
+                    complementaryCount++;
+                    String candidateIdentifier = getDeviceIdentifier(device);
+                    if (getSlotForIdentifier(candidateIdentifier) < 0) {
+                        replacementIdentifier = candidateIdentifier;
+                    }
+                }
+            }
+            if (complementaryCount != 1) replacementIdentifier = null;
+        }
         knownDeviceIdentifiers.remove(deviceId);
         scanForDevices();
         if (slot >= 0) {
+            InputDevice replacement = null;
+            if (replacementIdentifier != null) {
+                for (InputDevice device : detectedDevices) {
+                    if (replacementIdentifier.equals(getDeviceIdentifier(device))) {
+                        replacement = device;
+                        break;
+                    }
+                }
+            }
             slotAssignments.remove(slot);
             if (deviceIdentifier != null) {
                 lastKnownSlotByIdentifier.put(deviceIdentifier, slot);
             }
-            markSlotRecentlyFreed(slot);
+            if (replacement != null) {
+                assignDeviceIdentifierToSlot(slot, getDeviceIdentifier(replacement));
+                Log.i(TAG, "Promoted remaining Joy-Con deviceId=" + replacement.getId()
+                        + " to Player " + (slot + 1));
+            } else {
+                markSlotRecentlyFreed(slot);
+            }
             saveAssignments();
             notifySlotsChanged();
-            Log.i(TAG, "Unassigned disconnected deviceId=" + deviceId + " from Player " + (slot + 1));
+            if (replacement == null) {
+                Log.i(TAG, "Unassigned disconnected deviceId=" + deviceId + " from Player " + (slot + 1));
+            }
         }
     }
 
@@ -511,7 +713,9 @@ public class ControllerManager {
         if (slot == 0) return false;
         InputDevice occupant = getAssignedDeviceForSlot(0);
         if (occupant == null) {
-            String deviceIdentifier = getDeviceIdentifierForDeviceId(deviceId);
+            String deviceIdentifier = JoyConSupport.resolveClaimOwnerIdentifier(
+                    getSlotOwnerIdentifier(deviceId),
+                    getDeviceIdentifierForDeviceId(deviceId));
             if (deviceIdentifier == null) return false;
             assignDeviceIdentifierToSlot(0, deviceIdentifier);
             saveAssignments();
@@ -521,7 +725,7 @@ public class ControllerManager {
         }
         String occupantIdentifier = getDeviceIdentifier(occupant);
         if (occupantIdentifier == null || sessionActiveIdentifiers.contains(occupantIdentifier)) return false;
-        String deviceIdentifier = getDeviceIdentifierForDeviceId(deviceId);
+        String deviceIdentifier = getSlotOwnerIdentifier(deviceId);
         if (deviceIdentifier == null) return false;
         assignDeviceIdentifierToSlot(0, deviceIdentifier);
         if (slot > 0) {
@@ -534,7 +738,10 @@ public class ControllerManager {
     }
 
     private void markActive(int deviceId) {
-        String identifier = getDeviceIdentifierForDeviceId(deviceId);
+        String identifier = getSlotOwnerIdentifier(deviceId);
+        if (identifier == null) {
+            identifier = getDeviceIdentifierForDeviceId(deviceId);
+        }
         if (identifier == null || !sessionActiveIdentifiers.add(identifier)) return;
         InputDevice device = inputManager.getInputDevice(deviceId);
         if (device != null &&
@@ -555,7 +762,11 @@ public class ControllerManager {
     }
 
     private boolean isSlotAvailable(int slot) {
-        return slot >= 0 && slot < MAX_SLOTS && getAssignedDeviceForSlot(slot) == null;
+        if (slot < 0 || slot >= MAX_SLOTS) return false;
+        for (InputDevice device : detectedDevices) {
+            if (getSlotForDevice(device.getId()) == slot) return false;
+        }
+        return true;
     }
 
     private int getPreferredFreeSlot(String deviceIdentifier) {
