@@ -400,6 +400,7 @@ fun XServerScreen(
     bootToContainer: Boolean,
     testGraphics: Boolean = false,
     diagnostics: Boolean = false,
+    debugRun: Boolean = false,
     isOffline: Boolean = false,
     registerBackAction: ( ( ) -> Unit ) -> Unit,
     navigateBack: () -> Unit,
@@ -2315,6 +2316,7 @@ fun XServerScreen(
                                 bootToContainer,
                                 testGraphics,
                                 diagnostics,
+                                debugRun,
                                 xServerState,
                                 envVars,
                                 container,
@@ -3763,6 +3765,7 @@ private fun setupXEnvironment(
     bootToContainer: Boolean,
     testGraphics: Boolean,
     diagnostics: Boolean,
+    debugRun: Boolean,
     xServerState: MutableState<XServerState>,
     envVars: EnvVars,
     container: Container?,
@@ -3817,7 +3820,9 @@ private fun setupXEnvironment(
     val enableBox86Logs = WinlatorPrefManager.getBoolean("enable_box86_64_logs", false)
     val wineDebugChannels = PrefManager.wineDebugChannels
     // explicitly enable or disable Wine debug channels
-    if (diagnostics) {
+    if (debugRun) {
+        envVars.put("WINEDEBUG", "warn+seh,+loaddll,+timestamp,+pid,+tid")
+    } else if (diagnostics) {
         envVars.put("WRAPPER_DIAG", "1")
         envVars.put("WRAPPER_DIAG_APPID", appId)
         envVars.put("WRAPPER_LOG_LEVEL", "info")
@@ -3835,11 +3840,11 @@ private fun setupXEnvironment(
     }
     // capture debug output to file if either Wine or Box86/64 logging is enabled
     var logFile: File? = null
-    val captureLogs = enableWineDebug || enableBox86Logs
+    val captureLogs = debugRun || enableWineDebug || enableBox86Logs
     if (captureLogs) {
         val wineLogDir = File(context.getExternalFilesDir(null), "wine_logs")
         wineLogDir.mkdirs()
-        logFile = File(wineLogDir, "wine_debug.log")
+        logFile = File(wineLogDir, if (debugRun) "debug_run_$appId.log" else "wine_debug.log")
         if (logFile.exists()) logFile.delete()
     }
 
@@ -4030,6 +4035,10 @@ private fun setupXEnvironment(
     guestProgramLauncherComponent.envVars = envVars
 
     val gameTerminationCallback = Callback<Int> { status ->
+        if (!isExiting.get() && status != 0) {
+            container.putSessionMetadata("guest_self_exited", "true")
+            container.saveData()
+        }
         if (status != 0) {
             Timber.e("Guest program terminated with status: $status")
             onGameLaunchError?.invoke("Game terminated with error status: $status")
