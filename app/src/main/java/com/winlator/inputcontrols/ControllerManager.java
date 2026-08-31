@@ -790,10 +790,11 @@ public class ControllerManager {
         deviceIdentifier = JoyConSupport.resolveClaimOwnerIdentifier(
                 deviceIdentifier, getDeviceIdentifierForDeviceId(deviceId));
         if (deviceIdentifier == null) return false;
+        int occupantDestinationSlot = JoyConSupport.resolveDisplacedOccupantSlot(
+                slot, slot < 0 ? getPreferredFreeSlot(occupantIdentifier) : -1);
+        if (occupantDestinationSlot < 0) return false;
         assignDeviceIdentifierToSlot(0, deviceIdentifier);
-        if (slot > 0) {
-            assignDeviceIdentifierToSlot(slot, occupantIdentifier);
-        }
+        assignDeviceIdentifierToSlot(occupantDestinationSlot, occupantIdentifier);
         saveAssignments();
         notifySlotsChanged();
         Log.i(TAG, "deviceId=" + deviceId + " displaced idle Player 1");

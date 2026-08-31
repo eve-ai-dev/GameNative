@@ -114,14 +114,20 @@ public final class JoyConSupport {
                 && previousDirectSlot == previousPairSlot;
     }
 
-    /** Moves all remembered members of a logical pair to the owner's new slot. */
+    /** Replaces target-slot pair memory with all members of the pair moving from the old slot. */
     public static void moveRememberedPairSlot(
             Map<String, Integer> pairSlots,
             int previousSlot,
             int targetSlot
     ) {
         if (pairSlots == null || previousSlot == targetSlot) return;
+        pairSlots.entrySet().removeIf(entry -> entry.getValue() == targetSlot);
         pairSlots.replaceAll((identifier, slot) -> slot == previousSlot ? targetSlot : slot);
+    }
+
+    /** Returns the slot that should retain an idle Player 1 occupant during a controller claim. */
+    public static int resolveDisplacedOccupantSlot(int claimantSlot, int availableSlot) {
+        return claimantSlot > 0 ? claimantSlot : availableSlot;
     }
 
     /** A lone remembered non-owner must become the direct owner when the saved owner is absent. */
