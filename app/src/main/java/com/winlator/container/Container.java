@@ -60,7 +60,9 @@ public class Container {
             "MEDIACONV_BLANK_AUDIO_FILE=" + APP_DATA_DIR + "/files/imagefs/home/xuser/blank.wav",
             "MEDIACONV_BLANK_VIDEO_FILE=" + APP_DATA_DIR + "/files/imagefs/home/xuser/blank.mkv",
     };
-    public static final String DEFAULT_DRIVES = "D:" + Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "E:" + APP_DATA_DIR + "/storage";
+    public static final File LEGACY_DOWNLOADS_DRIVE_DIR = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+    public static final File GAMENATIVE_DOWNLOADS_DRIVE_DIR = new File(LEGACY_DOWNLOADS_DRIVE_DIR, "GameNative");
+    public static final String DEFAULT_DRIVES = "D:" + GAMENATIVE_DOWNLOADS_DRIVE_DIR + "E:" + APP_DATA_DIR + "/storage";
     public static final String DEFAULT_VARIANT = DefaultVersion.VARIANT;
     public static final String DEFAULT_WINE_VERSION = DefaultVersion.WINE_VERSION;
     public static final byte STARTUP_SELECTION_NORMAL = 0;

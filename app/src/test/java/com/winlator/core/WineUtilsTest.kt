@@ -13,6 +13,7 @@ import io.mockk.unmockkAll
 import io.mockk.verify
 import org.junit.After
 import org.junit.Before
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -61,5 +62,38 @@ class WineUtilsTest {
 
         verify { FileUtils.symlink("../drive_c", "$expectedDosdevicesPath/c:") }
         verify { FileUtils.symlink(canonicalRoot, "$expectedDosdevicesPath/z:") }
+    }
+
+    @Test
+    fun normalizeManagedDrives_migratesLegacyDownloadRootToGameNativeDirectory() {
+        val legacy = Container.LEGACY_DOWNLOADS_DRIVE_DIR.absolutePath
+        val isolated = Container.GAMENATIVE_DOWNLOADS_DRIVE_DIR.absolutePath
+        val current = "D:$legacy" + "E:/data/data/app.gamenative.joycontest/storage"
+
+        val normalized = WineUtils.normalizeManagedDrives(current)
+
+        assertEquals("D:$isolated" + "E:/data/data/app.gamenative.joycontest/storage", normalized)
+    }
+
+    @Test
+    fun normalizeManagedDrives_preservesCustomDDrive() {
+        val current = "D:/storage/emulated/0/MyGames" + "E:/data/data/app.gamenative.joycontest/storage"
+
+        assertEquals(current, WineUtils.normalizeManagedDrives(current))
+    }
+
+    @Test
+    fun normalizeManagedDrives_isIdempotentForIsolatedDownloadDirectory() {
+        val isolated = Container.GAMENATIVE_DOWNLOADS_DRIVE_DIR.absolutePath
+        val current = "D:$isolated" + "E:/data/data/app.gamenative.joycontest/storage"
+
+        assertEquals(current, WineUtils.normalizeManagedDrives(current))
+    }
+
+    @Test
+    fun defaultDrives_isolatesWineFilesUnderGameNativeDownloadDirectory() {
+        val isolated = Container.GAMENATIVE_DOWNLOADS_DRIVE_DIR.absolutePath
+
+        assertEquals(true, Container.DEFAULT_DRIVES.startsWith("D:$isolated"))
     }
 }

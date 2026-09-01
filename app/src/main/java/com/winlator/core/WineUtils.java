@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 import app.gamenative.BuildConfig;
 import app.gamenative.PrefManager;
@@ -37,18 +38,11 @@ public abstract class WineUtils {
         FileUtils.symlink(zTarget, dosdevicesPath + "/z:");
 
 
-        // Auto-fix containers missing D: and E: drives
+        // Keep Wine/installer scratch directories out of the public Download root.
+        // Existing containers created before this isolation used Download itself as D:.
         String currentDrives = container.getDrives();
-        if (!currentDrives.contains("D:") || !currentDrives.contains("E:")) {
-            Log.d("WineUtils", "Container missing D: or E: drives, adding them...");
-            String missingDrives = "";
-            if (!currentDrives.contains("D:")) {
-                missingDrives += "D:" + android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
-            }
-            if (!currentDrives.contains("E:")) {
-                missingDrives += "E:/data/data/" + BuildConfig.APPLICATION_ID + "/storage";
-            }
-            String updatedDrives = missingDrives + currentDrives;
+        String updatedDrives = normalizeManagedDrives(currentDrives);
+        if (!updatedDrives.equals(currentDrives)) {
             container.setDrives(updatedDrives);
             container.saveData();
             Log.d("WineUtils", "Updated container drives to: " + updatedDrives);
@@ -58,6 +52,9 @@ public abstract class WineUtils {
         for (String[] drive : container.drivesIterator()) {
             File linkTarget = new File(drive[1]);
             String path = linkTarget.getAbsolutePath();
+            if (path.equals(Container.GAMENATIVE_DOWNLOADS_DRIVE_DIR.getAbsolutePath()) && !linkTarget.isDirectory()) {
+                linkTarget.mkdirs();
+            }
             if (!linkTarget.isDirectory() && path.endsWith("/" + BuildConfig.APPLICATION_ID + "/storage")) {
                 linkTarget.mkdirs();
                 FileUtils.chmod(linkTarget, 0771);
@@ -119,6 +116,22 @@ public abstract class WineUtils {
                 steamappsDir.mkdirs();
             }
         }
+    }
+
+    static String normalizeManagedDrives(String currentDrives) {
+        String legacyDownloadsDrive = "D:" + Container.LEGACY_DOWNLOADS_DRIVE_DIR;
+        String isolatedDownloadsDrive = "D:" + Container.GAMENATIVE_DOWNLOADS_DRIVE_DIR;
+        String updatedDrives = currentDrives.replaceFirst(
+                Pattern.quote(legacyDownloadsDrive) + "(?=[A-Za-z]:|$)",
+                isolatedDownloadsDrive
+        );
+
+        String missingDrives = "";
+        if (!updatedDrives.contains("D:")) missingDrives += isolatedDownloadsDrive;
+        if (!updatedDrives.contains("E:")) {
+            missingDrives += "E:/data/data/" + BuildConfig.APPLICATION_ID + "/storage";
+        }
+        return missingDrives + updatedDrives;
     }
 
     private static void setWindowMetrics(WineRegistryEditor registryEditor) {
