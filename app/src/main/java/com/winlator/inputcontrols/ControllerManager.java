@@ -188,9 +188,14 @@ public class ControllerManager {
         boolean isGamepad = device.supportsSource(InputDevice.SOURCE_GAMEPAD);
         boolean isJoystick = device.supportsSource(InputDevice.SOURCE_JOYSTICK);
 
+        // Only consider axes reported under a controller source class. Composite HID
+        // devices (e.g. keyboards with built-in touchpads) expose AXIS_X/AXIS_Y through
+        // SOURCE_MOUSE and may wrongly claim SOURCE_JOYSTICK in their source mask, which
+        // caused them to be treated as gamepads. SOURCE_GAMEPAD is queried as well, for
+        // drivers that attach the sticks to the gamepad source instead.
         boolean hasAxes =
-                device.getMotionRange(android.view.MotionEvent.AXIS_X) != null ||
-                        device.getMotionRange(android.view.MotionEvent.AXIS_Y) != null;
+                ExternalController.hasControllerAxis(device, android.view.MotionEvent.AXIS_X) ||
+                        ExternalController.hasControllerAxis(device, android.view.MotionEvent.AXIS_Y);
 
         boolean[] hasGamepadKeysArray = device.hasKeys(
                 KeyEvent.KEYCODE_BUTTON_A,
@@ -219,6 +224,18 @@ public class ControllerManager {
      */
     public static String getDeviceIdentifier(InputDevice device) {
         if (device == null) return null;
+        if (JoyConSupport.isJoyCon(device)) {
+            List<int[]> connectedDevices = new ArrayList<>();
+            for (int deviceId : InputDevice.getDeviceIds()) {
+                InputDevice connectedDevice = InputDevice.getDevice(deviceId);
+                if (connectedDevice != null) {
+                    connectedDevices.add(new int[]{connectedDevice.getVendorId(), connectedDevice.getProductId()});
+                }
+            }
+            if (JoyConSupport.hasExactlyOnePair(connectedDevices)) {
+                return JoyConSupport.PAIRED_IDENTIFIER;
+            }
+        }
         // The descriptor is the most reliable unique ID for a device.
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             return device.getDescriptor();
