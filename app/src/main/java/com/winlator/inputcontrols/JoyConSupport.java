@@ -4,158 +4,48 @@ import android.view.InputDevice;
 import android.view.KeyEvent;
 
 import java.util.Collection;
-import java.util.Map;
 
-/** Compatibility helpers for Nintendo Switch Joy-Con halves exposed as separate Android devices. */
+/** Compatibility helpers for Nintendo Switch Joy-Con halves. */
 public final class JoyConSupport {
     public static final int NINTENDO_VENDOR_ID = 0x057e;
     public static final int JOY_CON_LEFT_PRODUCT_ID = 0x2006;
     public static final int JOY_CON_RIGHT_PRODUCT_ID = 0x2007;
+    public static final String PAIRED_IDENTIFIER = "nintendo_joycon_pair";
 
     private JoyConSupport() {}
-
-    public static boolean isLeftJoyCon(InputDevice device) {
-        return device != null && isLeftJoyCon(device.getVendorId(), device.getProductId());
-    }
-
-    public static boolean isRightJoyCon(InputDevice device) {
-        return device != null && isRightJoyCon(device.getVendorId(), device.getProductId());
-    }
 
     public static boolean isJoyCon(InputDevice device) {
         return device != null && isJoyCon(device.getVendorId(), device.getProductId());
     }
 
-    public static boolean isLeftJoyCon(int vendorId, int productId) {
-        return vendorId == NINTENDO_VENDOR_ID && productId == JOY_CON_LEFT_PRODUCT_ID;
+    static boolean isJoyCon(int vendorId, int productId) {
+        return vendorId == NINTENDO_VENDOR_ID
+                && (productId == JOY_CON_LEFT_PRODUCT_ID || productId == JOY_CON_RIGHT_PRODUCT_ID);
     }
 
-    public static boolean isRightJoyCon(int vendorId, int productId) {
-        return vendorId == NINTENDO_VENDOR_ID && productId == JOY_CON_RIGHT_PRODUCT_ID;
-    }
-
-    public static boolean isJoyCon(int vendorId, int productId) {
-        return isLeftJoyCon(vendorId, productId) || isRightJoyCon(vendorId, productId);
-    }
-
-    public static boolean areComplementary(InputDevice first, InputDevice second) {
-        return first != null && second != null && areComplementary(
-                first.getVendorId(), first.getProductId(), second.getVendorId(), second.getProductId());
-    }
-
-    public static boolean areComplementary(
-            int firstVendorId,
-            int firstProductId,
-            int secondVendorId,
-            int secondProductId
-    ) {
-        return (isLeftJoyCon(firstVendorId, firstProductId) && isRightJoyCon(secondVendorId, secondProductId))
-                || (isRightJoyCon(firstVendorId, firstProductId) && isLeftJoyCon(secondVendorId, secondProductId));
-    }
-
-    /**
-     * Returns whether the supplied IDs describe exactly one left and one right Joy-Con.
-     * Multiple same-side candidates are intentionally not paired because Android exposes no
-     * stable relationship that lets us determine which physical set belongs together.
-     */
-    public static boolean isUnambiguousPair(Collection<int[]> vendorProductIds) {
-        if (vendorProductIds == null) return false;
+    /** Returns true only when the connected topology contains one left and one right Joy-Con. */
+    public static boolean hasExactlyOnePair(Collection<int[]> connectedDevices) {
         int leftCount = 0;
         int rightCount = 0;
-        for (int[] ids : vendorProductIds) {
-            if (ids == null || ids.length < 2) continue;
-            if (isLeftJoyCon(ids[0], ids[1])) leftCount++;
-            if (isRightJoyCon(ids[0], ids[1])) rightCount++;
+        for (int[] ids : connectedDevices) {
+            if (ids == null || ids.length < 2 || ids[0] != NINTENDO_VENDOR_ID) continue;
+            if (ids[1] == JOY_CON_LEFT_PRODUCT_ID) leftCount++;
+            if (ids[1] == JOY_CON_RIGHT_PRODUCT_ID) rightCount++;
         }
         return leftCount == 1 && rightCount == 1;
     }
 
-    /** A pair is fused only while exactly one of its halves owns a player slot. */
-    public static boolean shouldFusePair(int firstDirectSlot, int secondDirectSlot) {
-        return (firstDirectSlot >= 0) != (secondDirectSlot >= 0);
+    public static int remapKeyCode(InputDevice device, KeyEvent event) {
+        if (device == null || event == null) {
+            return event != null ? event.getKeyCode() : KeyEvent.KEYCODE_UNKNOWN;
+        }
+        return remapKeyCode(
+                device.getVendorId(), device.getProductId(), event.getScanCode(), event.getKeyCode());
     }
 
-    /**
-     * Resolves a Joy-Con's logical player slot without letting persisted pair metadata fuse an
-     * ambiguous multi-pair topology. A lone surviving half may reuse the pair's persisted slot.
-     */
-    public static int resolveLogicalSlot(
-            boolean isJoyCon,
-            int directSlot,
-            int complementaryDirectSlot,
-            int persistedPairSlot,
-            int connectedJoyConCount
-    ) {
-        if (directSlot >= 0 || !isJoyCon) return directSlot;
-        if (complementaryDirectSlot >= 0) return complementaryDirectSlot;
-        return connectedJoyConCount == 1 ? persistedPairSlot : -1;
-    }
-
-    /** Returns the slot to retain when migrating a legacy split assignment, or -1 if not needed. */
-    public static int getLegacyPairOwnerSlot(int firstDirectSlot, int secondDirectSlot) {
-        return firstDirectSlot >= 0 && secondDirectSlot >= 0 && firstDirectSlot != secondDirectSlot
-                ? Math.min(firstDirectSlot, secondDirectSlot)
-                : -1;
-    }
-
-    /** Prefers the logical pair owner when a physical controller claims another player slot. */
-    public static String resolveClaimOwnerIdentifier(String logicalOwnerIdentifier, String directIdentifier) {
-        return logicalOwnerIdentifier != null ? logicalOwnerIdentifier : directIdentifier;
-    }
-
-    /** A directly assigned pair owner carries both remembered members when it changes slots. */
-    public static boolean shouldMoveRememberedPair(
-            int previousPairSlot,
-            int targetSlot,
-            int previousDirectSlot
-    ) {
-        return previousPairSlot >= 0
-                && previousPairSlot != targetSlot
-                && previousDirectSlot == previousPairSlot;
-    }
-
-    /** Replaces target-slot pair memory with all members of the pair moving from the old slot. */
-    public static void moveRememberedPairSlot(
-            Map<String, Integer> pairSlots,
-            int previousSlot,
-            int targetSlot
-    ) {
-        if (pairSlots == null || previousSlot == targetSlot) return;
-        pairSlots.entrySet().removeIf(entry -> entry.getValue() == targetSlot);
-        pairSlots.replaceAll((identifier, slot) -> slot == previousSlot ? targetSlot : slot);
-    }
-
-    /** Returns the slot that should retain an idle Player 1 occupant during a controller claim. */
-    public static int resolveDisplacedOccupantSlot(int claimantSlot, int availableSlot) {
-        return claimantSlot > 0 ? claimantSlot : availableSlot;
-    }
-
-    /** A lone remembered non-owner must become the direct owner when the saved owner is absent. */
-    public static boolean shouldPromoteRememberedLoneHalf(
-            boolean isJoyCon,
-            int directSlot,
-            int persistedPairSlot,
-            int connectedJoyConCount,
-            boolean persistedOwnerConnected
-    ) {
-        return isJoyCon
-                && directSlot < 0
-                && persistedPairSlot >= 0
-                && connectedJoyConCount == 1
-                && !persistedOwnerConnected;
-    }
-
-    /** Returns true when a controller with this descriptor may safely reuse cached source state. */
-    public static boolean canReuseSourceController(String cachedDescriptor, String currentDescriptor) {
-        return cachedDescriptor != null && cachedDescriptor.equals(currentDescriptor);
-    }
-
-    /**
-     * Android reports several Joy-Con buttons as unknown or with a generic layout. Translate the
-     * Linux scan codes used by the Joy-Con key layouts into stable Android gamepad key codes.
-     */
-    public static int remapKeyCode(int vendorId, int productId, int scanCode, int fallbackKeyCode) {
-        if (isLeftJoyCon(vendorId, productId)) {
+    static int remapKeyCode(int vendorId, int productId, int scanCode, int fallbackKeyCode) {
+        if (vendorId != NINTENDO_VENDOR_ID) return fallbackKeyCode;
+        if (productId == JOY_CON_LEFT_PRODUCT_ID) {
             switch (scanCode) {
                 case 544: return KeyEvent.KEYCODE_DPAD_UP;
                 case 545: return KeyEvent.KEYCODE_DPAD_DOWN;
@@ -169,8 +59,7 @@ public final class JoyConSupport {
                 default: return fallbackKeyCode;
             }
         }
-
-        if (isRightJoyCon(vendorId, productId)) {
+        if (productId == JOY_CON_RIGHT_PRODUCT_ID) {
             switch (scanCode) {
                 case 304: return KeyEvent.KEYCODE_BUTTON_A;
                 case 305: return KeyEvent.KEYCODE_BUTTON_B;
@@ -184,13 +73,10 @@ public final class JoyConSupport {
                 default: return fallbackKeyCode;
             }
         }
-
         return fallbackKeyCode;
     }
 
-    public static int remapKeyCode(InputDevice device, KeyEvent event) {
-        if (device == null || event == null) return event != null ? event.getKeyCode() : KeyEvent.KEYCODE_UNKNOWN;
-        return remapKeyCode(device.getVendorId(), device.getProductId(), event.getScanCode(), event.getKeyCode());
+    static float axisValue(boolean reported, float retained, float current) {
+        return reported ? current : retained;
     }
-
 }

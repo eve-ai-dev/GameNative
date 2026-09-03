@@ -64,7 +64,13 @@ jobs:
           install -m 0755 app/build/evshim/libevshim.so app/src/main/jniLibs/arm64-v8a/libevshim.so
           nm -D app/src/main/jniLibs/arm64-v8a/libevshim.so | grep -q Java_com_winlator_winhandler_WinHandler_initializeSharedMemory
       - name: Run Legacy and Modern unit tests
-        run: ./gradlew :app:testLegacyDebugUnitTest :app:testModernDebugUnitTest --no-daemon --max-workers=2
+        run: |
+          set -o pipefail
+          if ! ./gradlew :app:testLegacyDebugUnitTest :app:testModernDebugUnitTest --no-daemon --max-workers=2 2>&1 | tee app/build/unit-tests.log; then
+            message=$(tail -c 6000 app/build/unit-tests.log | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
+            printf '::error file=app/build/unit-tests.log::%s\n' "$message"
+            exit 1
+          fi
       - name: Build isolated unsigned candidate
         env:
           JOYCON_VERSION_CODE: ${{ github.run_number }}

@@ -180,10 +180,10 @@ public class ExternalController {
 
     private void processJoystickInput(MotionEvent event, int historyPos) {
         boolean z = false;
-        this.state.thumbLX = getCenteredAxis(event, MotionEvent.AXIS_X, historyPos);
-        this.state.thumbLY = getCenteredAxis(event, MotionEvent.AXIS_Y, historyPos);
-        this.state.thumbRX = getCenteredAxis(event, MotionEvent.AXIS_Z, historyPos);
-        this.state.thumbRY = getCenteredAxis(event, MotionEvent.AXIS_RZ, historyPos);
+        this.state.thumbLX = updateAxis(event, MotionEvent.AXIS_X, historyPos, this.state.thumbLX);
+        this.state.thumbLY = updateAxis(event, MotionEvent.AXIS_Y, historyPos, this.state.thumbLY);
+        this.state.thumbRX = updateAxis(event, MotionEvent.AXIS_Z, historyPos, this.state.thumbRX);
+        this.state.thumbRY = updateAxis(event, MotionEvent.AXIS_RZ, historyPos, this.state.thumbRY);
         if (historyPos == -1 && !JoyConSupport.isJoyCon(event.getDevice())) {
             float axisX = getCenteredAxis(event, MotionEvent.AXIS_HAT_X, historyPos);
             float axisY = getCenteredAxis(event, MotionEvent.AXIS_HAT_Y, historyPos);
@@ -200,6 +200,12 @@ public class ExternalController {
             }
             zArr[3] = z;
         }
+    }
+
+    private static float updateAxis(MotionEvent event, int axis, int historyPos, float retained) {
+        InputDevice device = event.getDevice();
+        boolean reported = device != null && device.getMotionRange(axis, event.getSource()) != null;
+        return JoyConSupport.axisValue(reported, retained, getCenteredAxis(event, axis, historyPos));
     }
 
     private void processTriggerButton(MotionEvent event) {
@@ -249,7 +255,7 @@ public class ExternalController {
 
     public boolean updateStateFromMotionEvent(MotionEvent event) {
         if (isJoystickDevice(event)) {
-            if (triggerType == TRIGGER_IS_AXIS)
+            if (triggerType == TRIGGER_IS_AXIS && !JoyConSupport.isJoyCon(event.getDevice()))
                 processTriggerButton(event);
             else if (triggerType == TRIGGER_IS_BUTTON && isXboxController())
                 processXboxTriggerButton(event);
@@ -268,13 +274,13 @@ public class ExternalController {
         int buttonIdx = getButtonIdxByKeyCode(keyCode);
         if (buttonIdx != -1) {
             if (buttonIdx == IDX_BUTTON_L2) {
-                if (triggerType == TRIGGER_IS_BUTTON) {
+                if (triggerType == TRIGGER_IS_BUTTON || JoyConSupport.isJoyCon(event.getDevice())) {
                     state.triggerL = pressed ? 1.0f : 0f;
                     state.setPressed(buttonIdx, pressed);
                 } else
                     return true;
             } else if (buttonIdx == IDX_BUTTON_R2) {
-                if (triggerType == TRIGGER_IS_BUTTON) {
+                if (triggerType == TRIGGER_IS_BUTTON || JoyConSupport.isJoyCon(event.getDevice())) {
                     state.triggerR = pressed ? 1.0f : 0f;
                     state.setPressed(buttonIdx, pressed);
                 } else
@@ -391,8 +397,7 @@ public class ExternalController {
             }
         }
 
-        return JoyConSupport.isJoyCon(device) ||
-                (isGamepad && hasGamepadKeys) ||
+        return (isGamepad && hasGamepadKeys) ||
                 (isJoystick && hasAxes);
     }
 
